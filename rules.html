@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Library borrowing rules for Students, Teachers, and Non-Teaching Staff. Borrowing limits, periods, and fines.">
+    <title>Library Rules — College Library</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+    <!-- Header -->
+    <header class="site-header">
+        <div class="header-inner">
+            <a href="index.html" class="site-logo">
+                <span class="logo-icon">📚</span>
+                <span>College Library</span>
+            </a>
+            <button class="hamburger" id="hamburger-btn" aria-label="Menu">
+                <span></span><span></span><span></span>
+            </button>
+            <nav>
+                <ul class="nav-links" id="nav-menu">
+                    <li><a href="index.html">Home</a></li>
+                    <li><a href="books.html">Books</a></li>
+                    <li><a href="rules.html">Rules</a></li>
+                    <li><a href="about.html">About</a></li>
+                    <li class="nav-login-link"><a href="login.html" class="btn-login">Login</a></li>
+                    <li class="nav-account-link" style="display:none"><a href="account.html">My Account</a></li>
+                    <li class="nav-librarian-link" style="display:none"><a href="librarian.html">Dashboard</a></li>
+                    <li class="nav-account-link" style="display:none"><a href="#" onclick="logoutUser(); window.location.href='index.html'; return false;">Logout</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Page Banner -->
+    <div class="page-banner">
+        <div class="container">
+            <h2>Library Rules & Borrowing Policy</h2>
+            <p>Borrowing limits differ for Students, Teachers, and Non-Teaching Staff.</p>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <main class="page-content">
+        <div class="container">
+
+            <!-- Borrowing Rules per User Type -->
+            <section class="section">
+                <h3 class="section-title">Borrowing Rules by User Type</h3>
+                <div class="rules-grid">
+
+                    <!-- Students -->
+                    <div class="rule-card">
+                        <h3>🎓 Students</h3>
+                        <div class="rule-item">
+                            <span class="rule-label">Maximum Books</span>
+                            <span class="rule-value">3</span>
+                        </div>
+                        <div class="rule-item">
+                            <span class="rule-label">Borrowing Period</span>
+                            <span class="rule-value">14 days</span>
+                        </div>
+                        <div class="rule-item">
+                            <span class="rule-label">Renewal Allowed</span>
+                            <span class="rule-value">1 time</span>
+                        </div>
+                        <div class="rule-item">
+                            <span class="rule-label">Fine (after due date)</span>
+                            <span class="rule-value">₹2 / day / book</span>
+                        </div>
+                        <div class="rule-item">
+                            <span class="rule-label">Reference Books</span>
+                            <span class="rule-value">Not for regular borrowing</span>
+                        </div>
+                    </div>
+
+                    <!-- Teachers -->
+                    <div class="rule-card">
+                        <h3>👨‍🏫 Teachers</h3>
+                        <div class="rule-item">
+                            <span class="rule-label">Maximum Books</span>
+                            <span class="rule-value">8</span>
+                        </div>
+                        <div class="rule-item">
+                            <span class="rule-label">Borrowing Period</span>
+                            <span class="rule-value">30 days</span>
+                        </div>
+                        <div class="rule-item">
+                            <span class="rule-label">Renewal Allowed</span>
+                            <span class="rule-value">2 times</span>
+                        </div>
+                        <div class="rule-item">
+                            <span class="rule-label">Fine (after due date)</span>
+                            <span class="rule-value">₹1 / day / book</span>
+                        </div>
+                        <div class="rule-item">
+                            <span class="rule-label">Reference/Academic</span>
+                            <span class="rule-value">Subject to library policy</span>
+                        </div>
+                    </div>
+
+                    <!-- Non-Teaching Staff -->
+                    <div class="rule-card">
+                        <h3>🏢 Non-Teaching Staff</h3>
+                        <div class="rule-item">
+                            <span class="rule-label">Maximum Books</span>
+                            <span class="rule-value">4</span>
+                        </div>
+                        <div class="rule-item">
+                            <span class="rule-label">Borrowing Period</span>
+                            <span class="rule-value">21 days</span>
+                        </div>
+                        <div class="rule-item">
+                            <span class="rule-label">Renewal Allowed</span>
+                            <span class="rule-value">1 time</span>
+                        </div>
+                        <div class="rule-item">
+                            <span class="rule-label">Fine (after due date)</span>
+                            <span class="rule-value">₹2 / day / book</span>
+                        </div>
+                    </div>
+
+                </div>
+            </section>
+
+            <!-- Fine Calculation -->
+            <section class="section">
+                <h3 class="section-title">Fine Calculation</h3>
+                <div class="about-content">
+                    <p>Fines are calculated based on the number of overdue days and the user type:</p>
+                    <p><strong>Fine = Number of Overdue Days × Fine Rate per Day (for user type)</strong></p>
+                    <div class="table-wrapper mt-20">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>User Type</th>
+                                    <th>Fine Rate</th>
+                                    <th>Example (7 days overdue)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Student</td>
+                                    <td>₹2 per day per book</td>
+                                    <td>7 × ₹2 = ₹14</td>
+                                </tr>
+                                <tr>
+                                    <td>Teacher</td>
+                                    <td>₹1 per day per book</td>
+                                    <td>7 × ₹1 = ₹7</td>
+                                </tr>
+                                <tr>
+                                    <td>Non-Teaching Staff</td>
+                                    <td>₹2 per day per book</td>
+                                    <td>7 × ₹2 = ₹14</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- General Rules -->
+            <section class="section">
+                <h3 class="section-title">General Library Rules</h3>
+                <div class="general-rules">
+                    <ol>
+                        <li>A valid college ID card is mandatory for library access and book borrowing.</li>
+                        <li>Books must be returned on or before the due date to avoid fines.</li>
+                        <li>Users with overdue books will not be allowed to borrow new books until the overdue books are returned.</li>
+                        <li>Library books should not be marked, highlighted, or damaged in any way. Damaged books must be replaced or compensated.</li>
+                        <li>Lost books must be reported immediately. The user will be required to pay the replacement cost of the book.</li>
+                        <li>Reference books and periodicals are for in-library use only and cannot be issued for home borrowing.</li>
+                        <li>The library reserves the right to recall any issued book at any time if needed.</li>
+                        <li>Silence must be maintained in the library premises.</li>
+                        <li>Personal belongings, food, and drinks are not allowed inside the library.</li>
+                        <li>Renewal requests must be made before or on the due date. Renewals are not guaranteed if the book is reserved by another user.</li>
+                    </ol>
+                </div>
+            </section>
+
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="site-footer">
+        <div class="container">
+            <p>College Library Management System</p>
+            <p>© 2026 Department of Computer Engineering</p>
+        </div>
+    </footer>
+
+    <script src="js/api.js"></script>
+    <script src="js/data.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>

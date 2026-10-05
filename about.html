@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="About the College Library — timings, location, contact, and facilities.">
+    <title>About — College Library</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+    <!-- Header -->
+    <header class="site-header">
+        <div class="header-inner">
+            <a href="index.html" class="site-logo">
+                <span class="logo-icon">📚</span>
+                <span>College Library</span>
+            </a>
+            <button class="hamburger" id="hamburger-btn" aria-label="Menu">
+                <span></span><span></span><span></span>
+            </button>
+            <nav>
+                <ul class="nav-links" id="nav-menu">
+                    <li><a href="index.html">Home</a></li>
+                    <li><a href="books.html">Books</a></li>
+                    <li><a href="rules.html">Rules</a></li>
+                    <li><a href="about.html">About</a></li>
+                    <li class="nav-login-link"><a href="login.html" class="btn-login">Login</a></li>
+                    <li class="nav-account-link" style="display:none"><a href="account.html">My Account</a></li>
+                    <li class="nav-librarian-link" style="display:none"><a href="librarian.html">Dashboard</a></li>
+                    <li class="nav-account-link" style="display:none"><a href="#" onclick="logoutUser(); window.location.href='index.html'; return false;">Logout</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Page Banner -->
+    <div class="page-banner">
+        <div class="container">
+            <h2>About the Library</h2>
+            <p>Learn about our library facilities, timings, and services.</p>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <main class="page-content">
+        <div class="container">
+
+            <!-- About -->
+            <section class="section">
+                <div class="about-content">
+                    <h3>Our Library</h3>
+                    <p>
+                        The College Library is a central resource for students, teachers, and non-teaching staff. 
+                        Established to support academic excellence, the library provides access to a wide collection 
+                        of textbooks, reference books, journals, and digital resources across all engineering and 
+                        science disciplines.
+                    </p>
+                    <p>
+                        The library operates a computerized book issue and return system, allowing members to 
+                        search for books, check availability, and manage their borrowing accounts through this 
+                        online portal. The system tracks all transactions including issue dates, due dates, 
+                        returns, and fines automatically.
+                    </p>
+
+                    <!-- Stats -->
+                    <div class="stats-row" id="about-stats">
+                        <div class="stat-box">
+                            <div class="stat-number" id="about-total-books">—</div>
+                            <div class="stat-label">Total Books</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-number" id="about-titles">—</div>
+                            <div class="stat-label">Unique Titles</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-number" id="about-categories">—</div>
+                            <div class="stat-label">Categories</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-number" id="about-members">—</div>
+                            <div class="stat-label">Registered Members</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Timings -->
+            <section class="section">
+                <h3 class="section-title">Library Timings</h3>
+                <div class="about-content">
+                    <div class="table-wrapper">
+                        <table class="timings-table">
+                            <thead>
+                                <tr>
+                                    <th>Day</th>
+                                    <th>Timing</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td>Monday – Friday</td><td>8:00 AM – 6:00 PM</td></tr>
+                                <tr><td>Saturday</td><td>9:00 AM – 2:00 PM</td></tr>
+                                <tr><td>Sunday</td><td>Closed</td></tr>
+                                <tr><td>Public Holidays</td><td>Closed</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <p class="text-muted text-small mt-10">* Timings may vary during examination periods.</p>
+                </div>
+            </section>
+
+            <!-- Facilities -->
+            <section class="section">
+                <h3 class="section-title">Facilities</h3>
+                <div class="about-content">
+                    <ul style="list-style: disc; padding-left: 24px; color: #444; line-height: 2;">
+                        <li>Separate reading halls for students and faculty</li>
+                        <li>Computerized book search and issue system</li>
+                        <li>Reference section with encyclopedias, handbooks, and journals</li>
+                        <li>Newspaper and magazine section</li>
+                        <li>Photocopy facility</li>
+                        <li>Internet access for academic research</li>
+                        <li>Book bank facility for economically weaker students</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- Contact -->
+            <section class="section">
+                <h3 class="section-title">Contact Information</h3>
+                <div class="about-content">
+                    <div class="form-row">
+                        <div>
+                            <p><strong>Library In-charge:</strong> Mr. Vikram Singh</p>
+                            <p><strong>Email:</strong> library@college.edu.in</p>
+                            <p><strong>Phone:</strong> +91 22 1234 5678</p>
+                        </div>
+                        <div>
+                            <p><strong>Location:</strong> Ground Floor, Main Building</p>
+                            <p><strong>Address:</strong> College of Engineering,</p>
+                            <p>Mumbai, Maharashtra — 400001</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="site-footer">
+        <div class="container">
+            <p>College Library Management System</p>
+            <p>© 2026 Department of Computer Engineering</p>
+        </div>
+    </footer>
+
+    <script src="js/api.js"></script>
+    <script src="js/data.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/app.js"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            var totalBooks = books.reduce(function (sum, b) { return sum + b.total_copies; }, 0);
+            document.getElementById("about-total-books").textContent = totalBooks;
+            document.getElementById("about-titles").textContent = books.length;
+            document.getElementById("about-categories").textContent = getBookCategories().length;
+            document.getElementById("about-members").textContent = users.filter(function (u) { return u.user_type !== "Librarian"; }).length;
+        });
+    </script>
+</body>
+</html>

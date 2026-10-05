@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="College Library Management System — Search, borrow and manage library books.">
+    <title>College Library — Home</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+    <!-- Header -->
+    <header class="site-header">
+        <div class="header-inner">
+            <a href="index.html" class="site-logo">
+                <span class="logo-icon">📚</span>
+                <span>College Library</span>
+            </a>
+            <button class="hamburger" id="hamburger-btn" aria-label="Menu">
+                <span></span><span></span><span></span>
+            </button>
+            <nav>
+                <ul class="nav-links" id="nav-menu">
+                    <li><a href="index.html">Home</a></li>
+                    <li><a href="books.html">Books</a></li>
+                    <li><a href="rules.html">Rules</a></li>
+                    <li><a href="about.html">About</a></li>
+                    <li class="nav-login-link"><a href="login.html" class="btn-login">Login</a></li>
+                    <li class="nav-account-link" style="display:none"><a href="account.html">My Account</a></li>
+                    <li class="nav-librarian-link" style="display:none"><a href="librarian.html">Dashboard</a></li>
+                    <li class="nav-account-link" style="display:none"><a href="#" onclick="logoutUser(); window.location.href='index.html'; return false;">Logout</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="container">
+            <h1>Welcome to the College Library</h1>
+            <p>Search, borrow and manage library books easily.</p>
+            <form class="search-bar" id="hero-search-form" action="books.html" method="get">
+                <input type="text" id="hero-search-input" name="q" placeholder="Search books by title, author, subject or ISBN">
+                <button type="submit">Search</button>
+            </form>
+            <div class="quick-links">
+                <a href="books.html">Browse Books</a>
+                <a href="rules.html">Library Rules</a>
+                <a href="account.html">My Account</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Main Content -->
+    <main class="page-content">
+        <div class="container">
+
+            <!-- Who Can Use the Library -->
+            <section class="section">
+                <h2 class="section-title">Who Can Use the Library?</h2>
+                <div class="cards-row">
+                    <div class="card">
+                        <h3>🎓 Students</h3>
+                        <ul>
+                            <li>Access academic and reference books</li>
+                            <li>Borrow books according to student limits</li>
+                            <li>Check due dates</li>
+                            <li>View borrowing history</li>
+                        </ul>
+                    </div>
+                    <div class="card">
+                        <h3>👨‍🏫 Teachers</h3>
+                        <ul>
+                            <li>Higher borrowing limit</li>
+                            <li>Longer borrowing period</li>
+                            <li>Access teaching/reference material</li>
+                            <li>View current borrowed books</li>
+                        </ul>
+                    </div>
+                    <div class="card">
+                        <h3>🏢 Non-Teaching Staff</h3>
+                        <ul>
+                            <li>Separate borrowing limit</li>
+                            <li>Defined borrowing period</li>
+                            <li>View due dates</li>
+                            <li>Check borrowing history</li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Quick Stats -->
+            <section class="section">
+                <h2 class="section-title">Library at a Glance</h2>
+                <div class="stats-row" id="home-stats">
+                    <div class="stat-box">
+                        <div class="stat-number" id="stat-total-books">—</div>
+                        <div class="stat-label">Total Books</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-number" id="stat-available">—</div>
+                        <div class="stat-label">Available</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-number" id="stat-issued">—</div>
+                        <div class="stat-label">Currently Issued</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-number" id="stat-members">—</div>
+                        <div class="stat-label">Members</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Recently Added / Popular Books -->
+            <section class="section">
+                <h2 class="section-title">Popular Books</h2>
+                <div class="table-wrapper">
+                    <table id="popular-books-table">
+                        <thead>
+                            <tr>
+                                <th>Book ID</th>
+                                <th>Title</th>
+                                <th>Author</th>
+                                <th>Category</th>
+                                <th>Status</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="popular-books-body">
+                        </tbody>
+                    </table>
+                </div>
+                <div class="mt-20 text-center">
+                    <a href="books.html" class="btn btn-outline">View All Books →</a>
+                </div>
+            </section>
+
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="site-footer">
+        <div class="container">
+            <p>College Library Management System</p>
+            <p>© 2026 Department of Computer Engineering</p>
+        </div>
+    </footer>
+
+    <script src="js/api.js"></script>
+    <script src="js/data.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/app.js"></script>
+    <script>
+        // --- Home Page Logic ---
+        document.addEventListener("DOMContentLoaded", function () {
+            // Fill stats
+            var totalBooks = books.reduce(function (sum, b) { return sum + b.total_copies; }, 0);
+            var availableBooks = books.reduce(function (sum, b) { return sum + b.available_copies; }, 0);
+            var issuedBooks = getAllIssuedBooks().length;
+            var totalMembers = users.filter(function (u) { return u.user_type !== "Librarian"; }).length;
+
+            document.getElementById("stat-total-books").textContent = totalBooks;
+            document.getElementById("stat-available").textContent = availableBooks;
+            document.getElementById("stat-issued").textContent = issuedBooks;
+            document.getElementById("stat-members").textContent = totalMembers;
+
+            // Show first 6 books
+            var popularBooks = books.slice(0, 6);
+            var tbody = document.getElementById("popular-books-body");
+            popularBooks.forEach(function (book) {
+                var statusClass = book.available_copies > 0 ? "status-available" : "status-issued";
+                var statusText = book.available_copies > 0 ? "Available" : "Issued";
+                var tr = document.createElement("tr");
+                tr.innerHTML =
+                    '<td>' + book.book_id + '</td>' +
+                    '<td>' + book.title + '</td>' +
+                    '<td>' + book.author + '</td>' +
+                    '<td>' + book.category + '</td>' +
+                    '<td><span class="status-badge ' + statusClass + '">' + statusText + '</span></td>' +
+                    '<td><button class="btn btn-sm btn-outline" onclick="viewBookDetails(\'' + book.book_id + '\')">View</button></td>';
+                tbody.appendChild(tr);
+            });
+        });
+    </script>
+</body>
+</html>

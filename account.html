@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="View your library account — borrowed books, due dates, borrowing history and fines.">
+    <title>My Account — College Library</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+    <!-- Header -->
+    <header class="site-header">
+        <div class="header-inner">
+            <a href="index.html" class="site-logo">
+                <span class="logo-icon">📚</span>
+                <span>College Library</span>
+            </a>
+            <button class="hamburger" id="hamburger-btn" aria-label="Menu">
+                <span></span><span></span><span></span>
+            </button>
+            <nav>
+                <ul class="nav-links" id="nav-menu">
+                    <li><a href="index.html">Home</a></li>
+                    <li><a href="books.html">Books</a></li>
+                    <li><a href="rules.html">Rules</a></li>
+                    <li><a href="about.html">About</a></li>
+                    <li class="nav-login-link"><a href="login.html" class="btn-login">Login</a></li>
+                    <li class="nav-account-link" style="display:none"><a href="account.html">My Account</a></li>
+                    <li class="nav-librarian-link" style="display:none"><a href="librarian.html">Dashboard</a></li>
+                    <li class="nav-account-link" style="display:none"><a href="#" onclick="logoutUser(); window.location.href='index.html'; return false;">Logout</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Not Logged In View -->
+    <div class="not-logged-in-message" id="not-logged-in" style="display:none">
+        <h2>Please Log In</h2>
+        <p>You need to log in to view your account.</p>
+        <a href="login.html" class="btn btn-primary">Go to Login</a>
+    </div>
+
+    <!-- Logged In View -->
+    <div id="account-content" style="display:none">
+
+        <!-- Page Banner -->
+        <div class="page-banner">
+            <div class="container">
+                <h2>Welcome, <span id="account-user-name"></span></h2>
+                <p id="account-user-type-label"></p>
+            </div>
+        </div>
+
+        <main class="page-content">
+            <div class="container">
+
+                <!-- User Info -->
+                <section class="section">
+                    <h3 class="section-title">Your Information</h3>
+                    <div class="user-info-grid" id="user-info-grid">
+                    </div>
+                </section>
+
+                <!-- Library Summary -->
+                <section class="section">
+                    <h3 class="section-title">Library Summary</h3>
+                    <div class="summary-row" id="summary-row">
+                    </div>
+                </section>
+
+                <!-- Currently Borrowed Books -->
+                <section class="section">
+                    <h3 class="section-title">Currently Borrowed Books</h3>
+                    <div class="table-wrapper" id="borrowed-section">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Book</th>
+                                    <th>Book ID</th>
+                                    <th>Issue Date</th>
+                                    <th>Due Date</th>
+                                    <th>Status</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="borrowed-books-body">
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="no-data" id="no-borrowed-msg" style="display:none">
+                        You have no books currently borrowed.
+                    </div>
+                </section>
+
+                <!-- Borrowing History -->
+                <section class="section">
+                    <h3 class="section-title">Borrowing History</h3>
+                    <div class="table-wrapper" id="history-section">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Book</th>
+                                    <th>Issue Date</th>
+                                    <th>Return Date</th>
+                                    <th>Fine</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="history-books-body">
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="no-data" id="no-history-msg" style="display:none">
+                        No borrowing history yet.
+                    </div>
+                </section>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- Footer -->
+    <footer class="site-footer">
+        <div class="container">
+            <p>College Library Management System</p>
+            <p>© 2026 Department of Computer Engineering</p>
+        </div>
+    </footer>
+
+    <script src="js/api.js"></script>
+    <script src="js/data.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/app.js"></script>
+    <script>
+        // Load account data — called on page load and after returns
+        function loadAccountData() {
+            var user = getCurrentUser();
+            if (!user) {
+                document.getElementById("not-logged-in").style.display = "block";
+                document.getElementById("account-content").style.display = "none";
+                return;
+            }
+
+            // Redirect librarian
+            if (user.user_type === "Librarian") {
+                window.location.href = "librarian.html";
+                return;
+            }
+
+            document.getElementById("not-logged-in").style.display = "none";
+            document.getElementById("account-content").style.display = "block";
+
+            // Fill user info
+            document.getElementById("account-user-name").textContent = user.name;
+            document.getElementById("account-user-type-label").textContent = user.user_type + " — " + user.department;
+
+            var infoGrid = document.getElementById("user-info-grid");
+            infoGrid.innerHTML =
+                '<div class="user-info-item"><span class="label">Name</span><span class="value">' + user.name + '</span></div>' +
+                '<div class="user-info-item"><span class="label">User ID</span><span class="value">' + user.user_id + '</span></div>' +
+                '<div class="user-info-item"><span class="label">User Type</span><span class="value">' + user.user_type + '</span></div>' +
+                '<div class="user-info-item"><span class="label">Department</span><span class="value">' + user.department + '</span></div>' +
+                '<div class="user-info-item"><span class="label">Email</span><span class="value">' + user.email + '</span></div>' +
+                '<div class="user-info-item"><span class="label">Phone</span><span class="value">' + user.phone + '</span></div>';
+
+            // Get transactions
+            var activeBooks = getActiveTransactionsForUser(user.user_id);
+            var returnedBooks = getReturnedTransactionsForUser(user.user_id);
+            var overdueBooks = activeBooks.filter(function (t) { return t.status === "Overdue"; });
+            var totalFines = getTransactionsForUser(user.user_id).reduce(function (sum, t) { return sum + (t.fine || 0); }, 0);
+
+            // Summary
+            var summaryRow = document.getElementById("summary-row");
+            summaryRow.innerHTML =
+                '<div class="summary-box"><div class="number">' + activeBooks.length + '</div><div class="label">Books Borrowed</div></div>' +
+                '<div class="summary-box"><div class="number">' + returnedBooks.length + '</div><div class="label">Books Returned</div></div>' +
+                '<div class="summary-box"><div class="number">' + overdueBooks.length + '</div><div class="label">Pending / Overdue</div></div>' +
+                '<div class="summary-box"><div class="number">₹' + totalFines + '</div><div class="label">Total Fines</div></div>';
+
+            // Currently Borrowed
+            var borrowedBody = document.getElementById("borrowed-books-body");
+            var noBorrowedMsg = document.getElementById("no-borrowed-msg");
+            var borrowedSection = document.getElementById("borrowed-section");
+            borrowedBody.innerHTML = "";
+
+            if (activeBooks.length === 0) {
+                noBorrowedMsg.style.display = "block";
+                borrowedSection.style.display = "none";
+            } else {
+                noBorrowedMsg.style.display = "none";
+                borrowedSection.style.display = "block";
+
+                activeBooks.forEach(function (txn) {
+                    var book = getBookById(txn.book_id);
+                    var bookTitle = book ? book.title : txn.book_id;
+                    var statusClass = txn.status === "Overdue" ? "status-overdue" : "status-issued";
+
+                    var tr = document.createElement("tr");
+                    tr.innerHTML =
+                        '<td>' + bookTitle + '</td>' +
+                        '<td>' + txn.book_id + '</td>' +
+                        '<td>' + formatDate(txn.issue_date) + '</td>' +
+                        '<td>' + formatDate(txn.due_date) + '</td>' +
+                        '<td><span class="status-badge ' + statusClass + '">' + txn.status + '</span></td>' +
+                        '<td>' +
+                            '<button class="btn btn-sm btn-outline" onclick="viewBookDetails(\'' + txn.book_id + '\')">View</button> ' +
+                            '<button class="btn btn-sm btn-secondary" onclick="returnBook(\'' + txn.transaction_id + '\')">Return</button>' +
+                        '</td>';
+                    borrowedBody.appendChild(tr);
+                });
+            }
+
+            // Borrowing History
+            var historyBody = document.getElementById("history-books-body");
+            var noHistoryMsg = document.getElementById("no-history-msg");
+            var historySection = document.getElementById("history-section");
+            historyBody.innerHTML = "";
+
+            if (returnedBooks.length === 0) {
+                noHistoryMsg.style.display = "block";
+                historySection.style.display = "none";
+            } else {
+                noHistoryMsg.style.display = "none";
+                historySection.style.display = "block";
+
+                returnedBooks.forEach(function (txn) {
+                    var book = getBookById(txn.book_id);
+                    var bookTitle = book ? book.title : txn.book_id;
+
+                    var tr = document.createElement("tr");
+                    tr.innerHTML =
+                        '<td>' + bookTitle + '</td>' +
+                        '<td>' + formatDate(txn.issue_date) + '</td>' +
+                        '<td>' + formatDate(txn.return_date) + '</td>' +
+                        '<td>' + (txn.fine > 0 ? '₹' + txn.fine : '—') + '</td>' +
+                        '<td><span class="status-badge status-returned">Returned</span></td>';
+                    historyBody.appendChild(tr);
+                });
+            }
+        }
+
+        document.addEventListener("DOMContentLoaded", function () {
+            loadAccountData();
+        });
+    </script>
+</body>
+</html>

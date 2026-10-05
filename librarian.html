@@ -1,0 +1,958 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Librarian Dashboard — Manage books, members, transactions, and view reports.">
+    <title>Librarian Dashboard — College Library</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+    <!-- Header -->
+    <header class="site-header">
+        <div class="header-inner">
+            <a href="index.html" class="site-logo">
+                <span class="logo-icon">📚</span>
+                <span>College Library</span>
+            </a>
+            <button class="hamburger" id="hamburger-btn" aria-label="Menu">
+                <span></span><span></span><span></span>
+            </button>
+            <nav>
+                <ul class="nav-links" id="nav-menu">
+                    <li><a href="index.html">Home</a></li>
+                    <li><a href="books.html">Books</a></li>
+                    <li><a href="rules.html">Rules</a></li>
+                    <li><a href="about.html">About</a></li>
+                    <li class="nav-login-link"><a href="login.html" class="btn-login">Login</a></li>
+                    <li class="nav-account-link" style="display:none"><a href="account.html">My Account</a></li>
+                    <li class="nav-librarian-link" style="display:none"><a href="librarian.html">Dashboard</a></li>
+                    <li class="nav-account-link" style="display:none"><a href="#" onclick="logoutUser(); window.location.href='index.html'; return false;">Logout</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Not Authorized View -->
+    <div class="not-logged-in-message" id="not-authorized" style="display:none">
+        <h2>Access Restricted</h2>
+        <p>This page is only accessible to library administrators.</p>
+        <a href="login.html" class="btn btn-primary">Login as Librarian</a>
+    </div>
+
+    <!-- Librarian Dashboard -->
+    <div id="librarian-content" style="display:none">
+        <div class="page-banner">
+            <div class="container">
+                <h2>Librarian Dashboard</h2>
+                <p>Manage books, members, and library transactions.</p>
+            </div>
+        </div>
+
+        <main class="page-content">
+            <div class="container">
+                <div class="librarian-layout">
+
+                    <!-- Sidebar -->
+                    <aside class="librarian-sidebar">
+                        <div class="sidebar-section-title">Books</div>
+                        <ul class="sidebar-nav">
+                            <li><a href="#" class="active" data-section="manage-books">Manage Books</a></li>
+                            <li><a href="#" data-section="add-book">Add Book</a></li>
+                        </ul>
+                        <div class="sidebar-section-title">Members</div>
+                        <ul class="sidebar-nav">
+                            <li><a href="#" data-section="manage-members">View Members</a></li>
+                            <li><a href="#" data-section="add-member">Add Member</a></li>
+                        </ul>
+                        <div class="sidebar-section-title">Transactions</div>
+                        <ul class="sidebar-nav">
+                            <li><a href="#" data-section="issue-book">Issue Book</a></li>
+                            <li><a href="#" data-section="return-book-lib">Return Book</a></li>
+                            <li><a href="#" data-section="view-issued">Issued Books</a></li>
+                            <li><a href="#" data-section="view-overdue">Overdue Books</a></li>
+                        </ul>
+                        <div class="sidebar-section-title">Reports</div>
+                        <ul class="sidebar-nav">
+                            <li><a href="#" data-section="reports">Summary Report</a></li>
+                        </ul>
+                    </aside>
+
+                    <!-- Main Panel -->
+                    <div class="librarian-main">
+
+                        <!-- ====== MANAGE BOOKS ====== -->
+                        <div class="lib-section active" id="sec-manage-books">
+                            <div class="panel">
+                                <div class="panel-header">
+                                    <h3>All Books</h3>
+                                    <input type="text" id="lib-book-search" placeholder="Search books..." style="padding:7px 12px; border:1px solid #ccc; border-radius:4px; font-size:0.85rem; width:250px;">
+                                </div>
+                                <div class="table-wrapper">
+                                    <table>
+                                        <thead>
+                                            <tr>
+                                                <th>ID</th>
+                                                <th>Title</th>
+                                                <th>Author</th>
+                                                <th>Category</th>
+                                                <th>Available</th>
+                                                <th>Shelf</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="lib-books-body"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- ====== ADD BOOK ====== -->
+                        <div class="lib-section" id="sec-add-book" style="display:none">
+                            <div class="panel">
+                                <h3 style="margin-bottom:20px">Add New Book</h3>
+                                <form id="add-book-form">
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label>Book Title *</label>
+                                            <input type="text" id="ab-title" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Author *</label>
+                                            <input type="text" id="ab-author" required>
+                                        </div>
+                                    </div>
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label>ISBN *</label>
+                                            <input type="text" id="ab-isbn" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Publisher</label>
+                                            <input type="text" id="ab-publisher">
+                                        </div>
+                                    </div>
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label>Category *</label>
+                                            <select id="ab-category" required>
+                                                <option value="">— Select —</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Edition</label>
+                                            <input type="text" id="ab-edition" placeholder="e.g. 3rd Edition">
+                                        </div>
+                                    </div>
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label>Total Copies *</label>
+                                            <input type="number" id="ab-copies" min="1" value="1" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Shelf Number</label>
+                                            <input type="text" id="ab-shelf" placeholder="e.g. CS-A1">
+                                        </div>
+                                    </div>
+                                    <button type="submit" class="btn btn-primary">Add Book</button>
+                                    <button type="reset" class="btn btn-secondary">Clear</button>
+                                </form>
+                            </div>
+                        </div>
+
+                        <!-- ====== MANAGE MEMBERS ====== -->
+                        <div class="lib-section" id="sec-manage-members" style="display:none">
+                            <div class="panel">
+                                <div class="panel-header">
+                                    <h3>All Members</h3>
+                                    <input type="text" id="lib-member-search" placeholder="Search members..." style="padding:7px 12px; border:1px solid #ccc; border-radius:4px; font-size:0.85rem; width:250px;">
+                                </div>
+                                <div class="table-wrapper">
+                                    <table>
+                                        <thead>
+                                            <tr>
+                                                <th>User ID</th>
+                                                <th>Name</th>
+                                                <th>Type</th>
+                                                <th>Department</th>
+                                                <th>Email</th>
+                                                <th>Phone</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="lib-members-body"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- ====== ADD MEMBER ====== -->
+                        <div class="lib-section" id="sec-add-member" style="display:none">
+                            <div class="panel">
+                                <h3 style="margin-bottom:20px">Add New Member</h3>
+                                <form id="add-member-form">
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label>Full Name *</label>
+                                            <input type="text" id="am-name" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>User Type *</label>
+                                            <select id="am-type" required>
+                                                <option value="">— Select —</option>
+                                                <option value="Student">Student</option>
+                                                <option value="Teacher">Teacher</option>
+                                                <option value="Non-Teaching Staff">Non-Teaching Staff</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label>Department *</label>
+                                            <select id="am-dept" required>
+                                                <option value="">— Select —</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Email *</label>
+                                            <input type="email" id="am-email" required>
+                                        </div>
+                                    </div>
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label>Phone</label>
+                                            <input type="tel" id="am-phone">
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Password *</label>
+                                            <input type="text" id="am-password" required>
+                                        </div>
+                                    </div>
+                                    <button type="submit" class="btn btn-primary">Add Member</button>
+                                    <button type="reset" class="btn btn-secondary">Clear</button>
+                                </form>
+                            </div>
+                        </div>
+
+                        <!-- ====== ISSUE BOOK ====== -->
+                        <div class="lib-section" id="sec-issue-book" style="display:none">
+                            <div class="panel">
+                                <h3 style="margin-bottom:20px">Issue Book to User</h3>
+                                <form id="issue-book-form">
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label>User ID *</label>
+                                            <input type="text" id="ib-userid" placeholder="e.g. STU2023001" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Book ID *</label>
+                                            <input type="text" id="ib-bookid" placeholder="e.g. LIB001" required>
+                                        </div>
+                                    </div>
+                                    <div id="ib-preview" style="display:none" class="mt-10 mb-20"></div>
+                                    <button type="submit" class="btn btn-primary">Issue Book</button>
+                                    <button type="button" class="btn btn-secondary" id="ib-preview-btn">Preview</button>
+                                </form>
+                            </div>
+                        </div>
+
+                        <!-- ====== RETURN BOOK (Librarian) ====== -->
+                        <div class="lib-section" id="sec-return-book-lib" style="display:none">
+                            <div class="panel">
+                                <h3 style="margin-bottom:20px">Process Book Return</h3>
+                                <form id="return-book-form">
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label>User ID *</label>
+                                            <input type="text" id="rb-userid" placeholder="e.g. STU2023001" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>&nbsp;</label>
+                                            <button type="button" class="btn btn-secondary" id="rb-lookup-btn" style="width:100%">Look Up Issued Books</button>
+                                        </div>
+                                    </div>
+                                </form>
+                                <div id="rb-results" class="mt-20" style="display:none">
+                                    <div class="table-wrapper">
+                                        <table>
+                                            <thead>
+                                                <tr>
+                                                    <th>Transaction ID</th>
+                                                    <th>Book</th>
+                                                    <th>Issue Date</th>
+                                                    <th>Due Date</th>
+                                                    <th>Status</th>
+                                                    <th>Action</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="rb-results-body"></tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- ====== VIEW ISSUED BOOKS ====== -->
+                        <div class="lib-section" id="sec-view-issued" style="display:none">
+                            <div class="panel">
+                                <div class="panel-header">
+                                    <h3>Currently Issued Books</h3>
+                                </div>
+                                <div class="table-wrapper">
+                                    <table>
+                                        <thead>
+                                            <tr>
+                                                <th>Txn ID</th>
+                                                <th>User</th>
+                                                <th>Book</th>
+                                                <th>Issue Date</th>
+                                                <th>Due Date</th>
+                                                <th>Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="lib-issued-body"></tbody>
+                                    </table>
+                                </div>
+                                <div class="no-data" id="no-issued-msg" style="display:none">No books currently issued.</div>
+                            </div>
+                        </div>
+
+                        <!-- ====== VIEW OVERDUE ====== -->
+                        <div class="lib-section" id="sec-view-overdue" style="display:none">
+                            <div class="panel">
+                                <div class="panel-header">
+                                    <h3>Overdue Books</h3>
+                                </div>
+                                <div class="table-wrapper">
+                                    <table>
+                                        <thead>
+                                            <tr>
+                                                <th>Txn ID</th>
+                                                <th>User</th>
+                                                <th>Book</th>
+                                                <th>Due Date</th>
+                                                <th>Days Overdue</th>
+                                                <th>Est. Fine</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="lib-overdue-body"></tbody>
+                                    </table>
+                                </div>
+                                <div class="no-data" id="no-overdue-msg" style="display:none">No overdue books found.</div>
+                            </div>
+                        </div>
+
+                        <!-- ====== REPORTS ====== -->
+                        <div class="lib-section" id="sec-reports" style="display:none">
+                            <div class="panel">
+                                <h3 style="margin-bottom:20px">Library Summary Report</h3>
+                                <div class="summary-row" id="report-summary"></div>
+                                <h4 class="mt-30 mb-10">Books by Category</h4>
+                                <div class="table-wrapper">
+                                    <table>
+                                        <thead>
+                                            <tr>
+                                                <th>Category</th>
+                                                <th>Total Titles</th>
+                                                <th>Total Copies</th>
+                                                <th>Available</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="report-category-body"></tbody>
+                                    </table>
+                                </div>
+                                <h4 class="mt-30 mb-10">Members by Type</h4>
+                                <div class="table-wrapper">
+                                    <table>
+                                        <thead>
+                                            <tr>
+                                                <th>User Type</th>
+                                                <th>Count</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="report-member-body"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div> <!-- /librarian-main -->
+                </div> <!-- /librarian-layout -->
+            </div>
+        </main>
+    </div>
+
+    <!-- Footer -->
+    <footer class="site-footer">
+        <div class="container">
+            <p>College Library Management System</p>
+            <p>© 2026 Department of Computer Engineering</p>
+        </div>
+    </footer>
+
+    <script src="js/api.js"></script>
+    <script src="js/data.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/app.js"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            var user = getCurrentUser();
+
+            // Auth check
+            if (!user || user.user_type !== "Librarian") {
+                document.getElementById("not-authorized").style.display = "block";
+                document.getElementById("librarian-content").style.display = "none";
+                return;
+            }
+
+            document.getElementById("not-authorized").style.display = "none";
+            document.getElementById("librarian-content").style.display = "block";
+
+            // --- Sidebar Navigation ---
+            var sidebarLinks = document.querySelectorAll(".sidebar-nav a");
+            sidebarLinks.forEach(function (link) {
+                link.addEventListener("click", function (e) {
+                    e.preventDefault();
+                    var sectionId = this.getAttribute("data-section");
+
+                    // Hide all sections
+                    document.querySelectorAll(".lib-section").forEach(function (sec) {
+                        sec.style.display = "none";
+                    });
+
+                    // Remove active from all links
+                    sidebarLinks.forEach(function (l) { l.classList.remove("active"); });
+
+                    // Show selected and mark active
+                    document.getElementById("sec-" + sectionId).style.display = "block";
+                    this.classList.add("active");
+
+                    // Refresh data for the section
+                    refreshSection(sectionId);
+                });
+            });
+
+            // --- Refresh section data ---
+            function refreshSection(sectionId) {
+                if (sectionId === "manage-books") renderLibBooks();
+                else if (sectionId === "manage-members") renderLibMembers();
+                else if (sectionId === "view-issued") renderIssuedBooks();
+                else if (sectionId === "view-overdue") renderOverdueBooks();
+                else if (sectionId === "reports") renderReports();
+            }
+
+            // ====== MANAGE BOOKS ======
+            function renderLibBooks(query) {
+                var list = query ? searchBooks(query) : books;
+                var tbody = document.getElementById("lib-books-body");
+                tbody.innerHTML = "";
+
+                list.forEach(function (book) {
+                    var tr = document.createElement("tr");
+                    tr.innerHTML =
+                        '<td>' + book.book_id + '</td>' +
+                        '<td>' + book.title + '</td>' +
+                        '<td>' + book.author + '</td>' +
+                        '<td>' + book.category + '</td>' +
+                        '<td>' + book.available_copies + '/' + book.total_copies + '</td>' +
+                        '<td>' + book.shelf_number + '</td>' +
+                        '<td>' +
+                            '<button class="btn btn-sm btn-outline" onclick="viewBookDetails(\'' + book.book_id + '\')">View</button> ' +
+                            '<button class="btn btn-sm btn-secondary" onclick="editBookModal(\'' + book.book_id + '\')">Edit</button> ' +
+                            '<button class="btn btn-sm btn-danger" onclick="deleteBookConfirm(\'' + book.book_id + '\')">Delete</button>' +
+                        '</td>';
+                    tbody.appendChild(tr);
+                });
+            }
+            renderLibBooks();
+
+            document.getElementById("lib-book-search").addEventListener("input", function () {
+                renderLibBooks(this.value);
+            });
+
+            // Edit Book Modal
+            window.editBookModal = function (bookId) {
+                var book = getBookById(bookId);
+                if (!book) return;
+
+                var bodyHTML =
+                    '<form id="edit-book-form">' +
+                    '<div class="form-group"><label>Title</label><input type="text" id="eb-title" value="' + book.title + '"></div>' +
+                    '<div class="form-group"><label>Author</label><input type="text" id="eb-author" value="' + book.author + '"></div>' +
+                    '<div class="form-group"><label>ISBN</label><input type="text" id="eb-isbn" value="' + book.isbn + '"></div>' +
+                    '<div class="form-group"><label>Publisher</label><input type="text" id="eb-publisher" value="' + book.publisher + '"></div>' +
+                    '<div class="form-group"><label>Category</label><input type="text" id="eb-category" value="' + book.category + '"></div>' +
+                    '<div class="form-group"><label>Edition</label><input type="text" id="eb-edition" value="' + book.edition + '"></div>' +
+                    '<div class="form-row">' +
+                    '<div class="form-group"><label>Total Copies</label><input type="number" id="eb-total" value="' + book.total_copies + '"></div>' +
+                    '<div class="form-group"><label>Available Copies</label><input type="number" id="eb-available" value="' + book.available_copies + '"></div>' +
+                    '</div>' +
+                    '<div class="form-group"><label>Shelf Number</label><input type="text" id="eb-shelf" value="' + book.shelf_number + '"></div>' +
+                    '</form>';
+
+                var footerHTML = '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+                    '<button class="btn btn-primary" id="save-book-btn">Save Changes</button>';
+
+                showModal("Edit Book — " + book.book_id, bodyHTML, footerHTML);
+
+                document.getElementById("save-book-btn").addEventListener("click", function () {
+                    book.title = document.getElementById("eb-title").value;
+                    book.author = document.getElementById("eb-author").value;
+                    book.isbn = document.getElementById("eb-isbn").value;
+                    book.publisher = document.getElementById("eb-publisher").value;
+                    book.category = document.getElementById("eb-category").value;
+                    book.edition = document.getElementById("eb-edition").value;
+                    book.total_copies = parseInt(document.getElementById("eb-total").value) || book.total_copies;
+                    book.available_copies = parseInt(document.getElementById("eb-available").value) || book.available_copies;
+                    book.shelf_number = document.getElementById("eb-shelf").value;
+
+                    if (typeof saveBooks === "function") saveBooks();
+                    closeModal();
+                    renderLibBooks();
+                    showToast("Book updated successfully.", "success");
+                });
+            };
+
+            // Delete Book
+            window.deleteBookConfirm = function (bookId) {
+                var book = getBookById(bookId);
+                if (!book) return;
+
+                showConfirm("Are you sure you want to remove <strong>" + book.title + "</strong> (" + book.book_id + ") from the library?", function () {
+                    var idx = books.findIndex(function (b) { return b.book_id === bookId; });
+                    if (idx !== -1) {
+                        books.splice(idx, 1);
+                        if (typeof saveBooks === "function") saveBooks();
+                        renderLibBooks();
+                        showToast("Book removed from library.", "success");
+                    }
+                });
+            };
+
+            // ====== ADD BOOK ======
+            // Populate category dropdown
+            var catSelect = document.getElementById("ab-category");
+            getBookCategories().forEach(function (cat) {
+                var opt = document.createElement("option");
+                opt.value = cat;
+                opt.textContent = cat;
+                catSelect.appendChild(opt);
+            });
+            // Add "Other" option
+            var otherOpt = document.createElement("option");
+            otherOpt.value = "__other__";
+            otherOpt.textContent = "Other (type below)";
+            catSelect.appendChild(otherOpt);
+
+            document.getElementById("add-book-form").addEventListener("submit", function (e) {
+                e.preventDefault();
+
+                var category = document.getElementById("ab-category").value;
+                if (category === "__other__") {
+                    category = prompt("Enter new category name:");
+                    if (!category) return;
+                }
+
+                var newBook = {
+                    book_id: generateBookId(),
+                    title: document.getElementById("ab-title").value.trim(),
+                    author: document.getElementById("ab-author").value.trim(),
+                    isbn: document.getElementById("ab-isbn").value.trim(),
+                    publisher: document.getElementById("ab-publisher").value.trim() || "—",
+                    category: category,
+                    edition: document.getElementById("ab-edition").value.trim() || "1st Edition",
+                    total_copies: parseInt(document.getElementById("ab-copies").value) || 1,
+                    available_copies: parseInt(document.getElementById("ab-copies").value) || 1,
+                    shelf_number: document.getElementById("ab-shelf").value.trim() || "—"
+                };
+
+                books.push(newBook);
+                if (typeof saveBooks === "function") saveBooks();
+                this.reset();
+                showToast("Book added successfully! ID: " + newBook.book_id, "success");
+            });
+
+            // ====== MANAGE MEMBERS ======
+            function renderLibMembers(query) {
+                var list = users.filter(function (u) { return u.user_type !== "Librarian"; });
+                if (query) {
+                    var q = query.toLowerCase();
+                    list = list.filter(function (u) {
+                        return u.name.toLowerCase().includes(q) ||
+                            u.user_id.toLowerCase().includes(q) ||
+                            u.department.toLowerCase().includes(q) ||
+                            u.user_type.toLowerCase().includes(q);
+                    });
+                }
+
+                var tbody = document.getElementById("lib-members-body");
+                tbody.innerHTML = "";
+
+                list.forEach(function (u) {
+                    var tr = document.createElement("tr");
+                    tr.innerHTML =
+                        '<td>' + u.user_id + '</td>' +
+                        '<td>' + u.name + '</td>' +
+                        '<td><span class="badge badge-blue">' + u.user_type + '</span></td>' +
+                        '<td>' + u.department + '</td>' +
+                        '<td>' + u.email + '</td>' +
+                        '<td>' + u.phone + '</td>' +
+                        '<td><button class="btn btn-sm btn-outline" onclick="viewMemberDetails(\'' + u.user_id + '\')">View</button></td>';
+                    tbody.appendChild(tr);
+                });
+            }
+
+            document.getElementById("lib-member-search").addEventListener("input", function () {
+                renderLibMembers(this.value);
+            });
+
+            // View Member Details
+            window.viewMemberDetails = function (userId) {
+                var u = getUserById(userId);
+                if (!u) return;
+
+                var activeBooks = getActiveTransactionsForUser(userId);
+                var rules = getRulesForUserType(u.user_type);
+
+                var bodyHTML = '<table class="detail-table">' +
+                    '<tr><td>User ID</td><td>' + u.user_id + '</td></tr>' +
+                    '<tr><td>Name</td><td>' + u.name + '</td></tr>' +
+                    '<tr><td>Type</td><td>' + u.user_type + '</td></tr>' +
+                    '<tr><td>Department</td><td>' + u.department + '</td></tr>' +
+                    '<tr><td>Email</td><td>' + u.email + '</td></tr>' +
+                    '<tr><td>Phone</td><td>' + u.phone + '</td></tr>' +
+                    '<tr><td>Books Borrowed</td><td>' + activeBooks.length + (rules ? ' / ' + rules.maximum_books : '') + '</td></tr>' +
+                    '</table>';
+
+                if (activeBooks.length > 0) {
+                    bodyHTML += '<h4 style="margin:16px 0 8px">Currently Borrowed:</h4><ul style="padding-left:18px">';
+                    activeBooks.forEach(function (t) {
+                        var book = getBookById(t.book_id);
+                        bodyHTML += '<li style="margin-bottom:4px">' + (book ? book.title : t.book_id) + ' — due ' + formatDate(t.due_date) + '</li>';
+                    });
+                    bodyHTML += '</ul>';
+                }
+
+                showModal("Member Details", bodyHTML, '<button class="btn btn-primary" onclick="closeModal()">Close</button>');
+            };
+
+            // ====== ADD MEMBER ======
+            var deptSelect = document.getElementById("am-dept");
+            departments.forEach(function (dept) {
+                var opt = document.createElement("option");
+                opt.value = dept.department_name;
+                opt.textContent = dept.department_name;
+                deptSelect.appendChild(opt);
+            });
+
+            document.getElementById("add-member-form").addEventListener("submit", function (e) {
+                e.preventDefault();
+
+                var userType = document.getElementById("am-type").value;
+                var newUser = {
+                    user_id: generateUserId(userType),
+                    name: document.getElementById("am-name").value.trim(),
+                    email: document.getElementById("am-email").value.trim(),
+                    phone: document.getElementById("am-phone").value.trim() || "—",
+                    department: document.getElementById("am-dept").value,
+                    user_type: userType,
+                    password: document.getElementById("am-password").value
+                };
+
+                users.push(newUser);
+                if (typeof saveUsers === "function") saveUsers();
+                this.reset();
+                showToast("Member added successfully! ID: " + newUser.user_id, "success");
+            });
+
+            // ====== ISSUE BOOK (Librarian) ======
+            document.getElementById("ib-preview-btn").addEventListener("click", function () {
+                var userId = document.getElementById("ib-userid").value.trim();
+                var bookId = document.getElementById("ib-bookid").value.trim().toUpperCase();
+                var preview = document.getElementById("ib-preview");
+
+                if (!userId || !bookId) {
+                    showToast("Please enter both User ID and Book ID.", "warning");
+                    return;
+                }
+
+                var u = getUserById(userId);
+                var book = getBookById(bookId);
+                var html = "";
+
+                if (!u) {
+                    html = '<p style="color:#c62828">User not found: ' + userId + '</p>';
+                } else if (!book) {
+                    html = '<p style="color:#c62828">Book not found: ' + bookId + '</p>';
+                } else {
+                    var rules = getRulesForUserType(u.user_type);
+                    var active = getActiveTransactionsForUser(userId);
+                    html = '<div style="background:#f5f7fa; padding:14px; border-radius:4px">' +
+                        '<p><strong>User:</strong> ' + u.name + ' (' + u.user_type + ')</p>' +
+                        '<p><strong>Book:</strong> ' + book.title + '</p>' +
+                        '<p><strong>Available Copies:</strong> ' + book.available_copies + '</p>' +
+                        '<p><strong>Current Borrowings:</strong> ' + active.length + (rules ? ' / ' + rules.maximum_books : '') + '</p>' +
+                        '</div>';
+                }
+
+                preview.innerHTML = html;
+                preview.style.display = "block";
+            });
+
+            document.getElementById("issue-book-form").addEventListener("submit", function (e) {
+                e.preventDefault();
+
+                var userId = document.getElementById("ib-userid").value.trim();
+                var bookId = document.getElementById("ib-bookid").value.trim().toUpperCase();
+
+                if (!userId || !bookId) {
+                    showToast("Please enter both User ID and Book ID.", "warning");
+                    return;
+                }
+
+                var u = getUserById(userId);
+                if (!u) { showToast("User not found.", "error"); return; }
+                if (u.user_type === "Librarian") { showToast("Cannot issue books to librarian accounts.", "error"); return; }
+
+                var book = getBookById(bookId);
+                if (!book) { showToast("Book not found.", "error"); return; }
+                if (book.available_copies <= 0) { showToast("No copies available for this book.", "error"); return; }
+
+                var rules = getRulesForUserType(u.user_type);
+                var active = getActiveTransactionsForUser(userId);
+
+                if (rules && active.length >= rules.maximum_books) {
+                    showToast("User has reached the borrowing limit (" + rules.maximum_books + " books).", "warning");
+                    return;
+                }
+
+                var overdue = active.filter(function (t) { return t.status === "Overdue"; });
+                if (overdue.length > 0) {
+                    showToast("User has overdue books. Cannot issue until returned.", "warning");
+                    return;
+                }
+
+                var already = active.find(function (t) { return t.book_id === bookId; });
+                if (already) {
+                    showToast("User already has this book.", "info");
+                    return;
+                }
+
+                var issueDate = getTodayStr();
+                var dueDate = addDays(issueDate, rules ? rules.borrowing_days : 14);
+
+                var txn = {
+                    transaction_id: generateTransactionId(),
+                    user_id: userId,
+                    book_id: bookId,
+                    issue_date: issueDate,
+                    due_date: dueDate,
+                    return_date: null,
+                    fine: 0,
+                    status: "Issued"
+                };
+
+                transactions.push(txn);
+                book.available_copies--;
+
+                if (typeof saveTransactions === "function") saveTransactions();
+                if (typeof saveBooks === "function") saveBooks();
+
+                showToast("Book issued! Txn: " + txn.transaction_id + ", Due: " + formatDate(dueDate), "success");
+                this.reset();
+                document.getElementById("ib-preview").style.display = "none";
+            });
+
+            // ====== RETURN BOOK (Librarian) ======
+            document.getElementById("rb-lookup-btn").addEventListener("click", function () {
+                var userId = document.getElementById("rb-userid").value.trim();
+                if (!userId) {
+                    showToast("Please enter a User ID.", "warning");
+                    return;
+                }
+
+                var u = getUserById(userId);
+                if (!u) {
+                    showToast("User not found.", "error");
+                    return;
+                }
+
+                var active = getActiveTransactionsForUser(userId);
+                var results = document.getElementById("rb-results");
+                var tbody = document.getElementById("rb-results-body");
+
+                if (active.length === 0) {
+                    results.style.display = "none";
+                    showToast("No issued books found for " + u.name + ".", "info");
+                    return;
+                }
+
+                tbody.innerHTML = "";
+                results.style.display = "block";
+
+                active.forEach(function (txn) {
+                    var book = getBookById(txn.book_id);
+                    var statusClass = txn.status === "Overdue" ? "status-overdue" : "status-issued";
+
+                    var tr = document.createElement("tr");
+                    tr.innerHTML =
+                        '<td>' + txn.transaction_id + '</td>' +
+                        '<td>' + (book ? book.title : txn.book_id) + '</td>' +
+                        '<td>' + formatDate(txn.issue_date) + '</td>' +
+                        '<td>' + formatDate(txn.due_date) + '</td>' +
+                        '<td><span class="status-badge ' + statusClass + '">' + txn.status + '</span></td>' +
+                        '<td><button class="btn btn-sm btn-primary" onclick="libReturnBook(\'' + txn.transaction_id + '\', \'' + userId + '\')">Process Return</button></td>';
+                    tbody.appendChild(tr);
+                });
+            });
+
+            // Librarian return
+            window.libReturnBook = function (txnId, userId) {
+                var txn = transactions.find(function (t) { return t.transaction_id === txnId; });
+                if (!txn) return;
+
+                var book = getBookById(txn.book_id);
+                var u = getUserById(userId);
+                var returnDate = getTodayStr();
+                var fine = u ? calculateFine(u.user_type, txn.due_date, returnDate) : 0;
+
+                var msg = "Process return of <strong>" + (book ? book.title : txn.book_id) + "</strong> for <strong>" + (u ? u.name : userId) + "</strong>?";
+                if (fine > 0) {
+                    msg += "<br><br><strong>⚠ Late return. Fine: ₹" + fine + "</strong>";
+                }
+
+                showConfirm(msg, function () {
+                    txn.return_date = returnDate;
+                    txn.fine = fine;
+                    txn.status = "Returned";
+                    if (book) book.available_copies++;
+
+                    if (typeof saveTransactions === "function") saveTransactions();
+                    if (typeof saveBooks === "function") saveBooks();
+
+                    if (fine > 0) {
+                        showToast("Return processed. Fine: ₹" + fine, "warning");
+                    } else {
+                        showToast("Return processed successfully.", "success");
+                    }
+
+                    // Refresh the lookup
+                    document.getElementById("rb-lookup-btn").click();
+                });
+            };
+
+            // ====== VIEW ISSUED ======
+            function renderIssuedBooks() {
+                var issued = getAllIssuedBooks();
+                var tbody = document.getElementById("lib-issued-body");
+                var noMsg = document.getElementById("no-issued-msg");
+                tbody.innerHTML = "";
+
+                if (issued.length === 0) {
+                    noMsg.style.display = "block";
+                    return;
+                }
+                noMsg.style.display = "none";
+
+                issued.forEach(function (txn) {
+                    var user = getUserById(txn.user_id);
+                    var book = getBookById(txn.book_id);
+                    var statusClass = txn.status === "Overdue" ? "status-overdue" : "status-issued";
+
+                    var tr = document.createElement("tr");
+                    tr.innerHTML =
+                        '<td>' + txn.transaction_id + '</td>' +
+                        '<td>' + (user ? user.name + ' (' + user.user_type + ')' : txn.user_id) + '</td>' +
+                        '<td>' + (book ? book.title : txn.book_id) + '</td>' +
+                        '<td>' + formatDate(txn.issue_date) + '</td>' +
+                        '<td>' + formatDate(txn.due_date) + '</td>' +
+                        '<td><span class="status-badge ' + statusClass + '">' + txn.status + '</span></td>';
+                    tbody.appendChild(tr);
+                });
+            }
+
+            // ====== VIEW OVERDUE ======
+            function renderOverdueBooks() {
+                var overdue = getOverdueBooks();
+                var tbody = document.getElementById("lib-overdue-body");
+                var noMsg = document.getElementById("no-overdue-msg");
+                tbody.innerHTML = "";
+
+                if (overdue.length === 0) {
+                    noMsg.style.display = "block";
+                    return;
+                }
+                noMsg.style.display = "none";
+
+                overdue.forEach(function (txn) {
+                    var user = getUserById(txn.user_id);
+                    var book = getBookById(txn.book_id);
+
+                    var dueDate = new Date(txn.due_date);
+                    var today = new Date();
+                    var daysOverdue = Math.ceil((today - dueDate) / (1000 * 60 * 60 * 24));
+
+                    var fine = user ? calculateFine(user.user_type, txn.due_date, getTodayStr()) : 0;
+
+                    var tr = document.createElement("tr");
+                    tr.innerHTML =
+                        '<td>' + txn.transaction_id + '</td>' +
+                        '<td>' + (user ? user.name : txn.user_id) + '</td>' +
+                        '<td>' + (book ? book.title : txn.book_id) + '</td>' +
+                        '<td>' + formatDate(txn.due_date) + '</td>' +
+                        '<td style="color:#c62828; font-weight:600">' + daysOverdue + ' days</td>' +
+                        '<td style="color:#c62828; font-weight:600">₹' + fine + '</td>';
+                    tbody.appendChild(tr);
+                });
+            }
+
+            // ====== REPORTS ======
+            function renderReports() {
+                var totalCopies = books.reduce(function (s, b) { return s + b.total_copies; }, 0);
+                var availableCopies = books.reduce(function (s, b) { return s + b.available_copies; }, 0);
+                var issuedCount = getAllIssuedBooks().length;
+                var overdueCount = getOverdueBooks().length;
+                var memberCount = users.filter(function (u) { return u.user_type !== "Librarian"; }).length;
+
+                document.getElementById("report-summary").innerHTML =
+                    '<div class="summary-box"><div class="number">' + books.length + '</div><div class="label">Unique Titles</div></div>' +
+                    '<div class="summary-box"><div class="number">' + totalCopies + '</div><div class="label">Total Copies</div></div>' +
+                    '<div class="summary-box"><div class="number">' + availableCopies + '</div><div class="label">Available Copies</div></div>' +
+                    '<div class="summary-box"><div class="number">' + issuedCount + '</div><div class="label">Currently Issued</div></div>' +
+                    '<div class="summary-box"><div class="number">' + overdueCount + '</div><div class="label">Overdue</div></div>' +
+                    '<div class="summary-box"><div class="number">' + memberCount + '</div><div class="label">Total Members</div></div>' +
+                    '<div class="summary-box"><div class="number">' + transactions.length + '</div><div class="label">Total Transactions</div></div>' +
+                    '<div class="summary-box"><div class="number">₹' + transactions.reduce(function(s,t){return s+t.fine;},0) + '</div><div class="label">Total Fines Collected</div></div>';
+
+                // By category
+                var catBody = document.getElementById("report-category-body");
+                catBody.innerHTML = "";
+                var cats = getBookCategories();
+                cats.forEach(function (cat) {
+                    var catBooks = books.filter(function (b) { return b.category === cat; });
+                    var totalC = catBooks.reduce(function (s, b) { return s + b.total_copies; }, 0);
+                    var availC = catBooks.reduce(function (s, b) { return s + b.available_copies; }, 0);
+
+                    var tr = document.createElement("tr");
+                    tr.innerHTML = '<td>' + cat + '</td><td>' + catBooks.length + '</td><td>' + totalC + '</td><td>' + availC + '</td>';
+                    catBody.appendChild(tr);
+                });
+
+                // By member type
+                var memBody = document.getElementById("report-member-body");
+                memBody.innerHTML = "";
+                ["Student", "Teacher", "Non-Teaching Staff"].forEach(function (type) {
+                    var count = users.filter(function (u) { return u.user_type === type; }).length;
+                    var tr = document.createElement("tr");
+                    tr.innerHTML = '<td>' + type + '</td><td>' + count + '</td>';
+                    memBody.appendChild(tr);
+                });
+            }
+
+            // Initial load
+            renderLibBooks();
+        });
+    </script>
+</body>
+</html>
