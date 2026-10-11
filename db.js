@@ -1,7 +1,7 @@
 // ============================================================
 // MySQL Connection Pool (mysql2/promise)
 // ============================================================
-require('dotenv').config();
+require('dotenv').config({ override: true });
 const mysql = require('mysql2/promise');
 
 const pool = mysql.createPool({

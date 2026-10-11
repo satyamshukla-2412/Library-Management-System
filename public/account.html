@@ -28,7 +28,7 @@
                     <li class="nav-login-link"><a href="login.html" class="btn-login">Login</a></li>
                     <li class="nav-account-link" style="display:none"><a href="account.html">My Account</a></li>
                     <li class="nav-librarian-link" style="display:none"><a href="librarian.html">Dashboard</a></li>
-                    <li class="nav-account-link" style="display:none"><a href="#" onclick="logoutUser(); window.location.href='index.html'; return false;">Logout</a></li>
+                    <li class="nav-logout-link" style="display:none"><a href="#" onclick="logoutUser(); window.location.href='index.html'; return false;">Logout</a></li>
                 </ul>
             </nav>
         </div>
@@ -133,8 +133,40 @@
     <script src="js/auth.js"></script>
     <script src="js/app.js"></script>
     <script>
+        function escapeHtml(str) {
+            return String(str || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        // Return book from student account
+        async function returnMemberBook(borrowId, bookId) {
+            var user = getCurrentUser();
+            if (!user) return;
+            if (!confirm("Are you sure you want to return this book?")) return;
+            try {
+                if (typeof LibraryAPI !== "undefined") {
+                    var res = await LibraryAPI.returnBook(user.member_id || user.user_id, bookId);
+                    if (res && res.success) {
+                        showToast(res.message || "Book returned successfully!", "success");
+                        await loadAccountData();
+                        return;
+                    }
+                }
+            } catch (err) {
+                console.warn("[Account] Live return error:", err);
+            }
+            // Fallback to local mock handler
+            if (typeof returnBook === "function") {
+                returnBook(borrowId);
+            }
+        }
+
         // Load account data — called on page load and after returns
-        function loadAccountData() {
+        async function loadAccountData() {
             var user = getCurrentUser();
             if (!user) {
                 document.getElementById("not-logged-in").style.display = "block";
@@ -142,33 +174,63 @@
                 return;
             }
 
-            // Redirect librarian
+            // Redirect librarian to librarian dashboard
             if (user.user_type === "Librarian") {
                 window.location.href = "librarian.html";
                 return;
             }
 
+            // Show account view immediately
             document.getElementById("not-logged-in").style.display = "none";
             document.getElementById("account-content").style.display = "block";
 
-            // Fill user info
+            // Fill user info from session
             document.getElementById("account-user-name").textContent = user.name;
-            document.getElementById("account-user-type-label").textContent = user.user_type + " — " + user.department;
+            document.getElementById("account-user-type-label").textContent = user.user_type + " — " + (user.department || "General");
 
             var infoGrid = document.getElementById("user-info-grid");
             infoGrid.innerHTML =
-                '<div class="user-info-item"><span class="label">Name</span><span class="value">' + user.name + '</span></div>' +
-                '<div class="user-info-item"><span class="label">User ID</span><span class="value">' + user.user_id + '</span></div>' +
-                '<div class="user-info-item"><span class="label">User Type</span><span class="value">' + user.user_type + '</span></div>' +
-                '<div class="user-info-item"><span class="label">Department</span><span class="value">' + user.department + '</span></div>' +
-                '<div class="user-info-item"><span class="label">Email</span><span class="value">' + user.email + '</span></div>' +
-                '<div class="user-info-item"><span class="label">Phone</span><span class="value">' + user.phone + '</span></div>';
+                '<div class="user-info-item"><span class="label">Name</span><span class="value">' + escapeHtml(user.name) + '</span></div>' +
+                '<div class="user-info-item"><span class="label">User ID</span><span class="value">' + escapeHtml(user.user_id || user.member_id) + '</span></div>' +
+                '<div class="user-info-item"><span class="label">User Type</span><span class="value">' + escapeHtml(user.user_type) + '</span></div>' +
+                '<div class="user-info-item"><span class="label">Department</span><span class="value">' + escapeHtml(user.department || 'General') + '</span></div>' +
+                '<div class="user-info-item"><span class="label">Email</span><span class="value">' + escapeHtml(user.email) + '</span></div>' +
+                '<div class="user-info-item"><span class="label">Phone</span><span class="value">' + escapeHtml(user.phone || '—') + '</span></div>';
 
-            // Get transactions
-            var activeBooks = getActiveTransactionsForUser(user.user_id);
-            var returnedBooks = getReturnedTransactionsForUser(user.user_id);
-            var overdueBooks = activeBooks.filter(function (t) { return t.status === "Overdue"; });
-            var totalFines = getTransactionsForUser(user.user_id).reduce(function (sum, t) { return sum + (t.fine || 0); }, 0);
+            try {
+                if (typeof syncDatabaseWithBackend === "function") {
+                    await syncDatabaseWithBackend();
+                }
+            } catch (e) {
+                console.warn("[Account] Sync error:", e);
+            }
+
+            // Fetch live account loans from MySQL
+            var accData = null;
+            try {
+                if (typeof LibraryAPI !== "undefined") {
+                    accData = await LibraryAPI.getAccountData(user.member_id || user.user_id);
+                }
+            } catch (err) {
+                console.warn("[Account] API getAccountData failed:", err);
+            }
+
+            var activeBooks = [];
+            var returnedBooks = [];
+            var overdueBooks = [];
+            var totalFines = 0;
+
+            if (accData && accData.activeLoans) {
+                activeBooks = accData.activeLoans;
+                returnedBooks = accData.history || [];
+                overdueBooks = activeBooks.filter(function (t) { return t.status === "Overdue" || t.days_overdue > 0; });
+                totalFines = activeBooks.reduce(function (sum, t) { return sum + Number(t.current_fine || 0); }, 0);
+            } else {
+                activeBooks = typeof getActiveTransactionsForUser === "function" ? getActiveTransactionsForUser(user.user_id) : [];
+                returnedBooks = typeof getReturnedTransactionsForUser === "function" ? getReturnedTransactionsForUser(user.user_id) : [];
+                overdueBooks = activeBooks.filter(function (t) { return t.status === "Overdue"; });
+                totalFines = typeof getTransactionsForUser === "function" ? getTransactionsForUser(user.user_id).reduce(function (sum, t) { return sum + (t.fine || 0); }, 0) : 0;
+            }
 
             // Summary
             var summaryRow = document.getElementById("summary-row");
@@ -185,6 +247,7 @@
             borrowedBody.innerHTML = "";
 
             if (activeBooks.length === 0) {
+                noBorrowedMsg.innerHTML = '<p>You have no books currently borrowed.</p><a href="books.html" class="btn btn-primary btn-sm" style="margin-top:10px; display:inline-block;">Browse Library Books</a>';
                 noBorrowedMsg.style.display = "block";
                 borrowedSection.style.display = "none";
             } else {
@@ -192,20 +255,21 @@
                 borrowedSection.style.display = "block";
 
                 activeBooks.forEach(function (txn) {
-                    var book = getBookById(txn.book_id);
-                    var bookTitle = book ? book.title : txn.book_id;
-                    var statusClass = txn.status === "Overdue" ? "status-overdue" : "status-issued";
+                    var bookTitle = txn.title || txn.bk_title || (typeof getBookById === "function" && getBookById(txn.book_id) ? getBookById(txn.book_id).title : txn.book_id);
+                    var bookCode = txn.book_code || ('LIB' + String(txn.book_id).padStart(3, '0'));
+                    var statusClass = (txn.status === "Overdue" || txn.days_overdue > 0) ? "status-overdue" : "status-available";
+                    var statusLabel = (txn.status === "Overdue" || txn.days_overdue > 0) ? "Overdue" : "Issued";
 
                     var tr = document.createElement("tr");
                     tr.innerHTML =
-                        '<td>' + bookTitle + '</td>' +
-                        '<td>' + txn.book_id + '</td>' +
+                        '<td><strong>' + escapeHtml(bookTitle) + '</strong></td>' +
+                        '<td>' + escapeHtml(bookCode) + '</td>' +
                         '<td>' + formatDate(txn.issue_date) + '</td>' +
                         '<td>' + formatDate(txn.due_date) + '</td>' +
-                        '<td><span class="status-badge ' + statusClass + '">' + txn.status + '</span></td>' +
+                        '<td><span class="status-badge ' + statusClass + '">' + statusLabel + '</span></td>' +
                         '<td>' +
-                            '<button class="btn btn-sm btn-outline" onclick="viewBookDetails(\'' + txn.book_id + '\')">View</button> ' +
-                            '<button class="btn btn-sm btn-secondary" onclick="returnBook(\'' + txn.transaction_id + '\')">Return</button>' +
+                            '<button class="btn btn-sm btn-outline" onclick="viewBookDetails(\'' + (txn.book_id || bookCode) + '\')">View</button> ' +
+                            '<button class="btn btn-sm btn-secondary" onclick="returnMemberBook(\'' + (txn.borrow_id || txn.transaction_id) + '\', \'' + txn.book_id + '\')">Return</button>' +
                         '</td>';
                     borrowedBody.appendChild(tr);
                 });
@@ -225,15 +289,15 @@
                 historySection.style.display = "block";
 
                 returnedBooks.forEach(function (txn) {
-                    var book = getBookById(txn.book_id);
-                    var bookTitle = book ? book.title : txn.book_id;
+                    var bookTitle = txn.title || (typeof getBookById === "function" && getBookById(txn.book_id) ? getBookById(txn.book_id).title : txn.book_id);
+                    var fineAmt = Number(txn.fine_amount || txn.fine || 0);
 
                     var tr = document.createElement("tr");
                     tr.innerHTML =
-                        '<td>' + bookTitle + '</td>' +
+                        '<td><strong>' + escapeHtml(bookTitle) + '</strong></td>' +
                         '<td>' + formatDate(txn.issue_date) + '</td>' +
                         '<td>' + formatDate(txn.return_date) + '</td>' +
-                        '<td>' + (txn.fine > 0 ? '₹' + txn.fine : '—') + '</td>' +
+                        '<td>' + (fineAmt > 0 ? '₹' + fineAmt : '—') + '</td>' +
                         '<td><span class="status-badge status-returned">Returned</span></td>';
                     historyBody.appendChild(tr);
                 });

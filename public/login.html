@@ -28,7 +28,7 @@
                     <li class="nav-login-link"><a href="login.html" class="btn-login">Login</a></li>
                     <li class="nav-account-link" style="display:none"><a href="account.html">My Account</a></li>
                     <li class="nav-librarian-link" style="display:none"><a href="librarian.html">Dashboard</a></li>
-                    <li class="nav-account-link" style="display:none"><a href="#" onclick="logoutUser(); window.location.href='index.html'; return false;">Logout</a></li>
+                    <li class="nav-logout-link" style="display:none"><a href="#" onclick="logoutUser(); window.location.href='index.html'; return false;">Logout</a></li>
                 </ul>
             </nav>
         </div>
@@ -45,12 +45,20 @@
 
                 <form id="login-form">
                     <div class="form-group">
-                        <label for="login-userid">User ID / Enrollment ID</label>
-                        <input type="text" id="login-userid" placeholder="e.g. STU2023001" required>
+                        <label for="login-userid">User ID, Email, or Member ID</label>
+                        <input type="text" id="login-userid" placeholder="e.g. STU2023001 or name@college.edu.in" required>
                     </div>
                     <div class="form-group">
                         <label for="login-password">Password</label>
-                        <input type="password" id="login-password" placeholder="Enter your password" required>
+                        <div class="password-input-wrapper">
+                            <input type="password" id="login-password" placeholder="Enter your password" required>
+                            <button type="button" class="password-toggle-btn" id="toggle-login-password" aria-label="Show password" title="Show/Hide password">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                </svg>
+                            </button>
+                        </div>
                     </div>
                     <div class="form-group">
                         <label for="login-type">Login As</label>
@@ -66,6 +74,7 @@
                 </form>
 
                 <div class="login-footer">
+                    <p>New to the library? <a href="signup.html"><strong>Create an account</strong></a></p>
                     <a href="#" onclick="showToast('Please contact the library administrator to reset your password.', 'info'); return false;">Forgot Password?</a>
                 </div>
             </div>
@@ -86,6 +95,19 @@
     <script src="js/app.js"></script>
     <script>
         document.addEventListener("DOMContentLoaded", function () {
+            // Password visibility toggle
+            const togglePwdBtn = document.getElementById("toggle-login-password");
+            const pwdInput = document.getElementById("login-password");
+            if (togglePwdBtn && pwdInput) {
+                togglePwdBtn.addEventListener("click", function () {
+                    const isPassword = pwdInput.type === "password";
+                    pwdInput.type = isPassword ? "text" : "password";
+                    this.setAttribute("aria-label", isPassword ? "Hide password" : "Show password");
+                    this.innerHTML = isPassword ?
+                        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>' :
+                        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>';
+                });
+            }
             // If already logged in, redirect
             if (isLoggedIn()) {
                 var user = getCurrentUser();
@@ -100,6 +122,26 @@
             var form = document.getElementById("login-form");
             var errorEl = document.getElementById("login-error");
 
+            // Auto-fill if redirected from signup page
+            var regUserRaw = sessionStorage.getItem("registered_user");
+            if (regUserRaw) {
+                try {
+                    var regUser = JSON.parse(regUserRaw);
+                    if (regUser.email) {
+                        document.getElementById("login-userid").value = regUser.email;
+                    }
+                    if (regUser.userType) {
+                        document.getElementById("login-type").value = regUser.userType;
+                    }
+                    errorEl.textContent = "Account created successfully! Enter your password to log in.";
+                    errorEl.style.display = "block";
+                    errorEl.style.background = "#d1fae5";
+                    errorEl.style.color = "#065f46";
+                    errorEl.style.borderColor = "#a7f3d0";
+                    sessionStorage.removeItem("registered_user");
+                } catch (err) {}
+            }
+
             form.addEventListener("submit", async function (e) {
                 e.preventDefault();
 
@@ -110,6 +152,8 @@
                 if (!userId || !password || !userType) {
                     errorEl.textContent = "Please fill in all fields.";
                     errorEl.style.display = "block";
+                    errorEl.style.background = "";
+                    errorEl.style.color = "";
                     return;
                 }
 
@@ -129,6 +173,8 @@
                 } else {
                     errorEl.textContent = result.message;
                     errorEl.style.display = "block";
+                    errorEl.style.background = "";
+                    errorEl.style.color = "";
                 }
             });
         });

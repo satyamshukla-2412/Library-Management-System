@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="College Library Management System — Search, borrow and manage library books.">
+    <title>College Library — Home</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+    <!-- Header -->
+    <header class="site-header">
+        <div class="header-inner">
+            <a href="index.html" class="site-logo">
+                <span class="logo-icon">📚</span>
+                <span>College Library</span>
+            </a>
+            <button class="hamburger" id="hamburger-btn" aria-label="Menu">
+                <span></span><span></span><span></span>
+            </button>
+            <nav>
+                <ul class="nav-links" id="nav-menu">
+                    <li><a href="index.html">Home</a></li>
+                    <li><a href="books.html">Books</a></li>
+                    <li><a href="rules.html">Rules</a></li>
+                    <li><a href="about.html">About</a></li>
+                    <li class="nav-login-link"><a href="login.html" class="btn-login">Login</a></li>
+                    <li class="nav-account-link" style="display:none"><a href="account.html">My Account</a></li>
+                    <li class="nav-librarian-link" style="display:none"><a href="librarian.html">Dashboard</a></li>
+                    <li class="nav-logout-link" style="display:none"><a href="#" onclick="logoutUser(); window.location.href='index.html'; return false;">Logout</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="container">
+            <h1>Welcome to the College Library</h1>
+            <div class="search-container" id="hero-search-container">
+                <form class="search-bar" id="hero-search-form" action="books.html" method="get">
+                    <input type="text" id="hero-search-input" name="q" placeholder="Search books by title, author, subject or ISBN..." autocomplete="off">
+                    <button type="submit">Search</button>
+                </form>
+                <div class="search-suggestions" id="hero-search-suggestions" style="display:none"></div>
+            </div>
+            <div class="quick-links">
+                <a href="books.html">Browse Books</a>
+                <a href="rules.html">Library Rules</a>
+                <a href="account.html">My Account</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Main Content -->
+    <main class="page-content">
+        <div class="container">
+
+            <!-- Who Can Use the Library -->
+            <section class="section">
+                <h2 class="section-title">Who Can Use the Library?</h2>
+                <div class="cards-row">
+                    <div class="card">
+                        <h3>🎓 Students</h3>
+                        <ul>
+                            <li>Access academic and reference books</li>
+                            <li>Borrow books according to student limits</li>
+                            <li>Check due dates</li>
+                            <li>View borrowing history</li>
+                        </ul>
+                    </div>
+                    <div class="card">
+                        <h3>👨‍🏫 Teachers</h3>
+                        <ul>
+                            <li>Higher borrowing limit</li>
+                            <li>Longer borrowing period</li>
+                            <li>Access teaching/reference material</li>
+                            <li>View current borrowed books</li>
+                        </ul>
+                    </div>
+                    <div class="card">
+                        <h3>🏢 Non-Teaching Staff</h3>
+                        <ul>
+                            <li>Separate borrowing limit</li>
+                            <li>Defined borrowing period</li>
+                            <li>View due dates</li>
+                            <li>Check borrowing history</li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Quick Stats -->
+            <section class="section">
+                <h2 class="section-title">Library at a Glance</h2>
+                <div class="stats-row" id="home-stats">
+                    <div class="stat-box">
+                        <div class="stat-number" id="stat-total-books">—</div>
+                        <div class="stat-label">Total Books</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-number" id="stat-available">—</div>
+                        <div class="stat-label">Available</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-number" id="stat-issued">—</div>
+                        <div class="stat-label">Currently Issued</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-number" id="stat-members">—</div>
+                        <div class="stat-label">Members</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Recently Added / Popular Books -->
+            <section class="section">
+                <h2 class="section-title">Popular Books</h2>
+                <div class="table-wrapper">
+                    <table id="popular-books-table">
+                        <thead>
+                            <tr>
+                                <th>Book ID</th>
+                                <th>Title</th>
+                                <th>Author</th>
+                                <th>Category</th>
+                                <th>Status</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="popular-books-body">
+                        </tbody>
+                    </table>
+                </div>
+                <div class="mt-20 text-center">
+                    <a href="books.html" class="btn btn-outline">View All Books →</a>
+                </div>
+            </section>
+
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="site-footer">
+        <div class="container">
+            <p>College Library Management System</p>
+            <p>© 2026 Department of Computer Engineering</p>
+        </div>
+    </footer>
+
+    <script src="js/api.js"></script>
+    <script src="js/data.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/app.js"></script>
+    <script>
+        // --- Home Page Logic ---
+        document.addEventListener("DOMContentLoaded", async function () {
+            if (typeof syncDatabaseWithBackend === "function") {
+                await syncDatabaseWithBackend();
+            }
+
+            // Fill stats
+            const rep = typeof LibraryAPI !== "undefined" ? await LibraryAPI.getReports() : null;
+            if (rep && rep.summary) {
+                document.getElementById("stat-total-books").textContent = rep.summary.unique_titles;
+                document.getElementById("stat-available").textContent = rep.summary.available_copies;
+                document.getElementById("stat-issued").textContent = rep.summary.currently_issued;
+                document.getElementById("stat-members").textContent = rep.summary.total_members;
+            } else {
+                var totalBooks = books.reduce(function (sum, b) { return sum + b.total_copies; }, 0);
+                var availableBooks = books.reduce(function (sum, b) { return sum + b.available_copies; }, 0);
+                var issuedBooks = getAllIssuedBooks().length;
+                var totalMembers = users.filter(function (u) { return u.user_type !== "Librarian"; }).length;
+
+                document.getElementById("stat-total-books").textContent = totalBooks;
+                document.getElementById("stat-available").textContent = availableBooks;
+                document.getElementById("stat-issued").textContent = issuedBooks;
+                document.getElementById("stat-members").textContent = totalMembers;
+            }
+
+            // Show first 6 books
+            var popularBooks = books.slice(0, 6);
+            var tbody = document.getElementById("popular-books-body");
+            tbody.innerHTML = "";
+            popularBooks.forEach(function (book) {
+                var statusClass = book.available_copies > 0 ? "status-available" : "status-issued";
+                var statusText = book.available_copies > 0 ? "Available" : "Issued";
+                var tr = document.createElement("tr");
+                tr.innerHTML =
+                    '<td>' + book.book_id + '</td>' +
+                    '<td>' + book.title + '</td>' +
+                    '<td>' + book.author + '</td>' +
+                    '<td>' + book.category + '</td>' +
+                    '<td><span class="status-badge ' + statusClass + '">' + statusText + '</span></td>' +
+                    '<td><button class="btn btn-sm btn-outline" onclick="viewBookDetails(\'' + book.book_id + '\')">View</button></td>';
+                tbody.appendChild(tr);
+            });
+
+            // Autocomplete for Hero Search
+            var heroContainer = document.getElementById("hero-search-container");
+            var heroInput = document.getElementById("hero-search-input");
+            var heroSuggestions = document.getElementById("hero-search-suggestions");
+            var heroSelectedIndex = -1;
+            var heroDebounce = null;
+
+            function escapeHtml(str) {
+                return String(str || '')
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#039;');
+            }
+
+            function highlightMatch(text, query) {
+                if (!text || !query) return escapeHtml(text || '');
+                var safeText = escapeHtml(text);
+                var q = query.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                if (!q) return safeText;
+                var regex = new RegExp('(' + q + ')', 'gi');
+                return safeText.replace(regex, '<mark class="search-highlight">$1</mark>');
+            }
+
+            function renderHeroSuggestions() {
+                var query = heroInput.value.trim();
+                if (!query || query.length < 1) {
+                    heroSuggestions.style.display = "none";
+                    return;
+                }
+
+                var suggestions = typeof getSearchSuggestions === "function" ? getSearchSuggestions(query, 6) : [];
+                heroSuggestions.innerHTML = "";
+                heroSelectedIndex = -1;
+
+                if (suggestions.length === 0) {
+                    heroSuggestions.innerHTML =
+                        '<div class="suggestion-empty">' +
+                        '🔍 No books found matching "<strong>' + escapeHtml(query) + '</strong>".' +
+                        '</div>';
+                    heroSuggestions.style.display = "block";
+                    return;
+                }
+
+                suggestions.forEach(function (item, index) {
+                    var book = item.book;
+                    var isAvailable = book.available_copies > 0;
+                    var badgeClass = isAvailable ? "available" : "issued";
+                    var badgeText = isAvailable ? (book.available_copies + " available") : "All Issued";
+
+                    var el = document.createElement("div");
+                    el.className = "suggestion-item";
+                    el.setAttribute("data-index", index);
+
+                    var matchBadgeHtml = "";
+                    if (item.matchReason !== "Title") {
+                        matchBadgeHtml = '<span class="suggestion-match">Matched by ' + item.matchReason + ': ' + highlightMatch(item.matchDetail, query) + '</span>';
+                    }
+
+                    el.innerHTML =
+                        '<div class="suggestion-header">' +
+                            '<span class="suggestion-title">' + highlightMatch(book.title, query) + '</span>' +
+                            '<span class="suggestion-badge ' + badgeClass + '">' + badgeText + '</span>' +
+                        '</div>' +
+                        '<div class="suggestion-meta">' +
+                            '<span>👤 ' + highlightMatch(book.author, query) + '</span>' +
+                            '<span class="suggestion-tag">' + escapeHtml(book.category) + '</span>' +
+                            '<span>🔢 ISBN: ' + highlightMatch(book.isbn, query) + '</span>' +
+                            matchBadgeHtml +
+                        '</div>';
+
+                    el.addEventListener("click", function () {
+                        window.location.href = "books.html?q=" + encodeURIComponent(book.title);
+                    });
+
+                    heroSuggestions.appendChild(el);
+                });
+
+                var footer = document.createElement("div");
+                footer.className = "suggestion-footer";
+                footer.innerHTML = "💡 Click a book to view or press <strong>Enter</strong> to search catalog";
+                heroSuggestions.appendChild(footer);
+
+                heroSuggestions.style.display = "block";
+            }
+
+            heroInput.addEventListener("input", function () {
+                clearTimeout(heroDebounce);
+                heroDebounce = setTimeout(renderHeroSuggestions, 80);
+            });
+
+            heroInput.addEventListener("focus", function () {
+                if (heroInput.value.trim().length >= 1) renderHeroSuggestions();
+            });
+
+            document.addEventListener("click", function (e) {
+                if (!heroContainer.contains(e.target)) {
+                    heroSuggestions.style.display = "none";
+                }
+            });
+
+            heroInput.addEventListener("keydown", function (e) {
+                var items = heroSuggestions.querySelectorAll(".suggestion-item");
+                if (heroSuggestions.style.display === "block" && items.length > 0) {
+                    if (e.key === "ArrowDown") {
+                        e.preventDefault();
+                        heroSelectedIndex = (heroSelectedIndex + 1) % items.length;
+                        items.forEach(function (el, idx) {
+                            if (idx === heroSelectedIndex) {
+                                el.classList.add("active");
+                                el.scrollIntoView({ block: "nearest" });
+                            } else {
+                                el.classList.remove("active");
+                            }
+                        });
+                        return;
+                    } else if (e.key === "ArrowUp") {
+                        e.preventDefault();
+                        heroSelectedIndex = (heroSelectedIndex - 1 + items.length) % items.length;
+                        items.forEach(function (el, idx) {
+                            if (idx === heroSelectedIndex) {
+                                el.classList.add("active");
+                                el.scrollIntoView({ block: "nearest" });
+                            } else {
+                                el.classList.remove("active");
+                            }
+                        });
+                        return;
+                    } else if (e.key === "Enter") {
+                        if (heroSelectedIndex >= 0 && heroSelectedIndex < items.length) {
+                            e.preventDefault();
+                            items[heroSelectedIndex].click();
+                            return;
+                        }
+                    } else if (e.key === "Escape") {
+                        heroSuggestions.style.display = "none";
+                        return;
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html>

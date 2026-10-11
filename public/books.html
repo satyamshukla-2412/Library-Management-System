@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Search and browse library books. Filter by category, author, and availability.">
+    <title>Books — College Library</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+    <!-- Header -->
+    <header class="site-header">
+        <div class="header-inner">
+            <a href="index.html" class="site-logo">
+                <span class="logo-icon">📚</span>
+                <span>College Library</span>
+            </a>
+            <button class="hamburger" id="hamburger-btn" aria-label="Menu">
+                <span></span><span></span><span></span>
+            </button>
+            <nav>
+                <ul class="nav-links" id="nav-menu">
+                    <li><a href="index.html">Home</a></li>
+                    <li><a href="books.html">Books</a></li>
+                    <li><a href="rules.html">Rules</a></li>
+                    <li><a href="about.html">About</a></li>
+                    <li class="nav-login-link"><a href="login.html" class="btn-login">Login</a></li>
+                    <li class="nav-account-link" style="display:none"><a href="account.html">My Account</a></li>
+                    <li class="nav-librarian-link" style="display:none"><a href="librarian.html">Dashboard</a></li>
+                    <li class="nav-logout-link" style="display:none"><a href="#" onclick="logoutUser(); window.location.href='index.html'; return false;">Logout</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Page Banner -->
+    <div class="page-banner">
+        <div class="container">
+            <h2>Search Library Books</h2>
+            <p>Find books by title, author, ISBN or subject.</p>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <main class="page-content">
+        <div class="container">
+
+            <!-- Search & Filters -->
+            <div class="search-container mb-20" id="books-search-container">
+                <div class="search-bar">
+                    <input type="text" id="book-search-input" placeholder="Search by title, author, ISBN, category or shelf..." autocomplete="off">
+                    <button type="button" class="search-clear-btn" id="book-search-clear" title="Clear search">×</button>
+                    <button type="button" id="book-search-btn">Search</button>
+                </div>
+                <div class="search-suggestions" id="book-search-suggestions" style="display:none"></div>
+            </div>
+
+            <div class="filters-bar">
+                <div class="filter-group">
+                    <label>Category</label>
+                    <select id="filter-category">
+                        <option value="all">All Categories</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>Availability</label>
+                    <select id="filter-availability">
+                        <option value="all">All</option>
+                        <option value="available">Available</option>
+                        <option value="issued">Issued</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>Author</label>
+                    <input type="text" id="filter-author" placeholder="Filter by author...">
+                </div>
+                <div class="filter-group">
+                    <button class="btn btn-secondary" id="clear-filters-btn">Clear Filters</button>
+                </div>
+            </div>
+
+            <!-- Results Count -->
+            <p class="text-muted text-small mb-10" id="results-count"></p>
+
+            <!-- Books Table -->
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Book ID</th>
+                            <th>Book Title</th>
+                            <th>Author</th>
+                            <th>Category</th>
+                            <th>ISBN</th>
+                            <th>Available Copies</th>
+                            <th>Status</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="books-table-body">
+                    </tbody>
+                </table>
+            </div>
+            <div class="no-data" id="no-books-msg" style="display:none">
+                No books found matching your search.
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="site-footer">
+        <div class="container">
+            <p>College Library Management System</p>
+            <p>© 2026 Department of Computer Engineering</p>
+        </div>
+    </footer>
+
+    <script src="js/api.js"></script>
+    <script src="js/data.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/app.js"></script>
+    <script>
+        // --- Books Page Logic with Instant Autocomplete Search ---
+        document.addEventListener("DOMContentLoaded", async function () {
+            var searchContainer = document.getElementById("books-search-container");
+            var searchInput = document.getElementById("book-search-input");
+            var searchClear = document.getElementById("book-search-clear");
+            var searchBtn = document.getElementById("book-search-btn");
+            var suggestionsBox = document.getElementById("book-search-suggestions");
+
+            var filterCategory = document.getElementById("filter-category");
+            var filterAvailability = document.getElementById("filter-availability");
+            var filterAuthor = document.getElementById("filter-author");
+            var clearBtn = document.getElementById("clear-filters-btn");
+
+            var selectedSuggestionIndex = -1;
+            var debounceTimer = null;
+
+            if (typeof syncDatabaseWithBackend === "function") {
+                await syncDatabaseWithBackend();
+            }
+
+            // Populate categories dropdown
+            var categories = getBookCategories();
+            filterCategory.innerHTML = '<option value="all">All Categories</option>';
+            categories.forEach(function (cat) {
+                var opt = document.createElement("option");
+                opt.value = cat;
+                opt.textContent = cat;
+                filterCategory.appendChild(opt);
+            });
+
+            // Check for search query in URL
+            var urlParams = new URLSearchParams(window.location.search);
+            var queryParam = urlParams.get("q");
+            if (queryParam) {
+                searchInput.value = queryParam;
+                searchClear.style.display = "inline-flex";
+            }
+
+            // Helper to escape HTML
+            function escapeHtml(str) {
+                return String(str || '')
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#039;');
+            }
+
+            // Helper to highlight matching text
+            function highlightMatch(text, query) {
+                if (!text || !query) return escapeHtml(text || '');
+                var safeText = escapeHtml(text);
+                var q = query.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                if (!q) return safeText;
+                var regex = new RegExp('(' + q + ')', 'gi');
+                return safeText.replace(regex, '<mark class="search-highlight">$1</mark>');
+            }
+
+            // Render books in main catalog table
+            function renderBooks() {
+                var query = searchInput.value.trim();
+                var filtered = searchBooks(query);
+
+                filtered = filterBooks(filtered, {
+                    category: filterCategory.value,
+                    availability: filterAvailability.value,
+                    author: filterAuthor.value
+                });
+
+                var tbody = document.getElementById("books-table-body");
+                var noMsg = document.getElementById("no-books-msg");
+                var countEl = document.getElementById("results-count");
+
+                tbody.innerHTML = "";
+
+                if (filtered.length === 0) {
+                    noMsg.style.display = "block";
+                    countEl.textContent = "0 results found";
+                    return;
+                }
+
+                noMsg.style.display = "none";
+                countEl.textContent = "Showing " + filtered.length + " of " + books.length + " books";
+
+                filtered.forEach(function (book) {
+                    var statusClass = book.available_copies > 0 ? "status-available" : "status-issued";
+                    var statusText = book.available_copies > 0 ? "Available" : "Issued";
+                    var canBorrow = typeof isLoggedIn === "function" && isLoggedIn() && !isLibrarian() && book.available_copies > 0;
+                    var tr = document.createElement("tr");
+                    tr.id = "book-row-" + (book.book_id || book.book_code);
+                    tr.innerHTML =
+                        '<td><strong>' + (book.book_id || book.book_code) + '</strong></td>' +
+                        '<td>' + highlightMatch(book.title, query) + '</td>' +
+                        '<td>' + highlightMatch(book.author, query) + '</td>' +
+                        '<td><span class="suggestion-tag">' + escapeHtml(book.category) + '</span></td>' +
+                        '<td>' + highlightMatch(book.isbn, query) + '</td>' +
+                        '<td>' + book.available_copies + ' / ' + book.total_copies + '</td>' +
+                        '<td><span class="status-badge ' + statusClass + '">' + statusText + '</span></td>' +
+                        '<td>' +
+                            '<button class="btn btn-sm btn-outline" onclick="viewBookDetails(\'' + (book.book_id || book.book_code) + '\')">View</button> ' +
+                            (canBorrow ? '<button class="btn btn-sm btn-primary" onclick="borrowBook(\'' + (book.book_id || book.book_code) + '\')">Borrow</button>' : '') +
+                        '</td>';
+                    tbody.appendChild(tr);
+                });
+            }
+
+            // Render live suggestions dropdown
+            function renderSuggestions() {
+                var query = searchInput.value.trim();
+                if (!query || query.length < 1) {
+                    hideSuggestions();
+                    return;
+                }
+
+                var suggestions = getSearchSuggestions(query, 7);
+                suggestionsBox.innerHTML = "";
+                selectedSuggestionIndex = -1;
+
+                if (suggestions.length === 0) {
+                    suggestionsBox.innerHTML =
+                        '<div class="suggestion-empty">' +
+                        '🔍 No books found matching "<strong>' + escapeHtml(query) + '</strong>".' +
+                        '<div style="font-size: 0.78rem; margin-top: 4px; color: #94a3b8;">Try searching by author, ISBN, category, or title keywords.</div>' +
+                        '</div>';
+                    suggestionsBox.style.display = "block";
+                    return;
+                }
+
+                suggestions.forEach(function (item, index) {
+                    var book = item.book;
+                    var isAvailable = book.available_copies > 0;
+                    var badgeClass = isAvailable ? "available" : "issued";
+                    var badgeText = isAvailable ? (book.available_copies + " available") : "All Issued";
+
+                    var el = document.createElement("div");
+                    el.className = "suggestion-item";
+                    el.setAttribute("data-index", index);
+
+                    var matchBadgeHtml = "";
+                    if (item.matchReason !== "Title") {
+                        matchBadgeHtml = '<span class="suggestion-match">Matched by ' + item.matchReason + ': ' + highlightMatch(item.matchDetail, query) + '</span>';
+                    }
+
+                    el.innerHTML =
+                        '<div class="suggestion-header">' +
+                            '<span class="suggestion-title">' + highlightMatch(book.title, query) + '</span>' +
+                            '<span class="suggestion-badge ' + badgeClass + '">' + badgeText + '</span>' +
+                        '</div>' +
+                        '<div class="suggestion-meta">' +
+                            '<span>👤 ' + highlightMatch(book.author, query) + '</span>' +
+                            '<span class="suggestion-tag">' + escapeHtml(book.category) + '</span>' +
+                            '<span>🔢 ISBN: ' + highlightMatch(book.isbn, query) + '</span>' +
+                            (book.shelf_number ? '<span>📍 ' + escapeHtml(book.shelf_number) + '</span>' : '') +
+                            matchBadgeHtml +
+                        '</div>';
+
+                    el.addEventListener("click", function () {
+                        selectSuggestion(book);
+                    });
+
+                    suggestionsBox.appendChild(el);
+                });
+
+                // Add footer hint
+                var footer = document.createElement("div");
+                footer.className = "suggestion-footer";
+                footer.innerHTML = "💡 Click a suggestion to view, or press <strong>Enter</strong> to filter catalog";
+                suggestionsBox.appendChild(footer);
+
+                suggestionsBox.style.display = "block";
+            }
+
+            function hideSuggestions() {
+                suggestionsBox.style.display = "none";
+                selectedSuggestionIndex = -1;
+            }
+
+            function selectSuggestion(book) {
+                searchInput.value = book.title;
+                searchClear.style.display = "inline-flex";
+                hideSuggestions();
+                renderBooks();
+
+                // Open detail view for instant satisfaction
+                if (typeof viewBookDetails === "function") {
+                    viewBookDetails(book.book_id || book.book_code);
+                }
+            }
+
+            // Real-time live input search
+            searchInput.addEventListener("input", function () {
+                var val = searchInput.value.trim();
+                searchClear.style.display = val.length > 0 ? "inline-flex" : "none";
+
+                // Instant table render (debounced 80ms)
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(function () {
+                    renderBooks();
+                    renderSuggestions();
+                }, 80);
+            });
+
+            // Focus opens suggestions if there is text
+            searchInput.addEventListener("focus", function () {
+                if (searchInput.value.trim().length >= 1) {
+                    renderSuggestions();
+                }
+            });
+
+            // Keyboard navigation in suggestions list
+            searchInput.addEventListener("keydown", function (e) {
+                var items = suggestionsBox.querySelectorAll(".suggestion-item");
+                if (suggestionsBox.style.display === "block" && items.length > 0) {
+                    if (e.key === "ArrowDown") {
+                        e.preventDefault();
+                        selectedSuggestionIndex = (selectedSuggestionIndex + 1) % items.length;
+                        updateActiveSuggestion(items);
+                        return;
+                    } else if (e.key === "ArrowUp") {
+                        e.preventDefault();
+                        selectedSuggestionIndex = (selectedSuggestionIndex - 1 + items.length) % items.length;
+                        updateActiveSuggestion(items);
+                        return;
+                    } else if (e.key === "Enter") {
+                        if (selectedSuggestionIndex >= 0 && selectedSuggestionIndex < items.length) {
+                            e.preventDefault();
+                            items[selectedSuggestionIndex].click();
+                            return;
+                        }
+                    } else if (e.key === "Escape") {
+                        hideSuggestions();
+                        return;
+                    }
+                }
+
+                if (e.key === "Enter") {
+                    hideSuggestions();
+                    renderBooks();
+                }
+            });
+
+            function updateActiveSuggestion(items) {
+                items.forEach(function (el, idx) {
+                    if (idx === selectedSuggestionIndex) {
+                        el.classList.add("active");
+                        el.scrollIntoView({ block: "nearest" });
+                    } else {
+                        el.classList.remove("active");
+                    }
+                });
+            }
+
+            // Clear button
+            searchClear.addEventListener("click", function () {
+                searchInput.value = "";
+                searchClear.style.display = "none";
+                hideSuggestions();
+                renderBooks();
+                searchInput.focus();
+            });
+
+            // Close suggestions when clicking outside
+            document.addEventListener("click", function (e) {
+                if (!searchContainer.contains(e.target)) {
+                    hideSuggestions();
+                }
+            });
+
+            // Search button click
+            searchBtn.addEventListener("click", function () {
+                hideSuggestions();
+                renderBooks();
+            });
+
+            // Filter changes
+            filterCategory.addEventListener("change", renderBooks);
+            filterAvailability.addEventListener("change", renderBooks);
+            filterAuthor.addEventListener("input", renderBooks);
+
+            clearBtn.addEventListener("click", function () {
+                searchInput.value = "";
+                searchClear.style.display = "none";
+                filterCategory.value = "all";
+                filterAvailability.value = "all";
+                filterAuthor.value = "";
+                hideSuggestions();
+                renderBooks();
+            });
+
+            // Expose for external re-render (e.g. after borrowBook)
+            window.renderBooks = renderBooks;
+
+            // Initial render
+            renderBooks();
+        });
+    </script>
+</body>
+</html>

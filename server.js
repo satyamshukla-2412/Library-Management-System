@@ -2,7 +2,9 @@
 // College Library Management System - Express Backend Server
 // Bridges Frontend Web UI <---> MySQL 8+ (library_db)
 // ============================================================
-require('dotenv').config();
+// Prefer the project's .env values during local development. This prevents an
+// empty inherited shell variable from overriding an updated DB_PASSWORD.
+require('dotenv').config({ override: true });
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -11,12 +13,99 @@ const { pool, testConnection } = require('./db');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Resolve the public IDs shown in the UI (for example STU2023001) to the
+// matching member record. MySQL stores its own numeric member_id, while the
+// front end uses an ID sequence for each member type.
+async function findMemberForLogin(userId) {
+    if (!userId) return null;
+    const identifier = String(userId).trim();
+    const memberSql = `
+        SELECT m.member_id, m.name, m.email, m.phone, m.department, m.role, m.status,
+               m.password, mt.type_id, mt.type_name, mt.max_books, mt.loan_days, mt.fine_per_day
+          FROM member m
+          JOIN member_type mt ON m.type_id = mt.type_id
+    `;
+
+    // 1. Direct match by numeric member_id, email, name, phone, or email prefix
+    const [directMatches] = await pool.query(
+        `${memberSql} WHERE CAST(m.member_id AS CHAR) = ? 
+                          OR LOWER(m.email) = LOWER(?) 
+                          OR LOWER(m.name) = LOWER(?)
+                          OR m.phone = ?
+                          OR LOWER(SUBSTRING_INDEX(m.email, '@', 1)) = LOWER(?)`,
+        [identifier, identifier, identifier, identifier, identifier]
+    );
+    if (directMatches.length > 0) return directMatches[0];
+
+    // 2. Friendly aliases for Librarian
+    if (['librarian', 'admin', 'library'].includes(identifier.toLowerCase())) {
+        const [librarians] = await pool.query(
+            `${memberSql} WHERE mt.type_name = 'Librarian' AND m.status = 'ACTIVE' ORDER BY m.member_id ASC LIMIT 1`
+        );
+        if (librarians.length > 0) return librarians[0];
+    }
+
+    // 3. Match by formatted code, e.g. STU0000001, STU2023001, LIB001, EMP0000004
+    const match = identifier.toUpperCase().match(/^(STU|TCH|NTS|EMP|LIB)(\d+)$/);
+    if (match) {
+        const prefix = match[1];
+        const numPart = parseInt(match[2], 10);
+
+        // Try direct member_id match first
+        const [byId] = await pool.query(`${memberSql} WHERE m.member_id = ?`, [numPart]);
+        if (byId.length > 0) return byId[0];
+
+        // Try sequence/mock ID (like STU2023001 -> 1, LIB001 -> 1)
+        const typeByPrefix = {
+            STU: 'Student',
+            TCH: 'Teacher',
+            NTS: 'Non-Teaching Staff',
+            EMP: 'Teacher',
+            LIB: 'Librarian'
+        };
+        const targetType = typeByPrefix[prefix];
+        if (targetType) {
+            const seq = parseInt(match[2].slice(-3), 10);
+            const [typeMembers] = await pool.query(
+                `${memberSql} WHERE mt.type_name = ? ORDER BY m.member_id ASC`,
+                [targetType]
+            );
+            if (seq >= 1 && seq <= typeMembers.length) {
+                return typeMembers[seq - 1];
+            }
+        }
+    }
+
+    return null;
+}
+
+// Helper to resolve public/string/numeric Member ID to integer member_id
+async function resolveNumericMemberId(input) {
+    if (!input) return null;
+    const str = String(input).trim();
+    if (/^\d+$/.test(str)) return parseInt(str, 10);
+    const user = await findMemberForLogin(str);
+    return user ? user.member_id : null;
+}
+
+// Helper to resolve public/string/numeric Book ID to integer book_id
+async function resolveNumericBookId(input) {
+    if (!input) return null;
+    const str = String(input).trim();
+    if (/^\d+$/.test(str)) return parseInt(str, 10);
+    const match = str.toUpperCase().match(/^LIB0*(\d+)$/);
+    if (match) return parseInt(match[1], 10);
+    const [rows] = await pool.query('SELECT book_id FROM book WHERE isbn = ? OR title = ? LIMIT 1', [str, str]);
+    return rows.length > 0 ? rows[0].book_id : null;
+}
+
 // Middleware
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Serve frontend static files
+app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.static(__dirname));
 
 // ============================================================
@@ -50,21 +139,11 @@ app.post('/api/login', async (req, res) => {
     }
 
     try {
-        // Query member by ID or Email
-        const sql = `
-            SELECT m.member_id, m.name, m.email, m.phone, m.department, m.role, m.status,
-                   m.password, mt.type_id, mt.type_name, mt.max_books, mt.loan_days, mt.fine_per_day
-              FROM member m
-              JOIN member_type mt ON m.type_id = mt.type_id
-             WHERE (m.member_id = ? OR m.email = ?)
-        `;
-        const [rows] = await pool.query(sql, [userId, userId]);
+        const user = await findMemberForLogin(userId);
 
-        if (rows.length === 0) {
+        if (!user) {
             return res.status(401).json({ success: false, message: 'Member not found. Check your User ID / Email.' });
         }
-
-        const user = rows[0];
 
         // Check password
         if (user.password !== password) {
@@ -77,7 +156,7 @@ app.post('/api/login', async (req, res) => {
         }
 
         // Optional user type verification
-        if (userType && userType !== user.type_name && user.role !== 'LIBRARIAN') {
+        if (userType && userType !== user.type_name) {
             return res.status(401).json({ success: false, message: `Account is registered as ${user.type_name}, not ${userType}.` });
         }
 
@@ -100,7 +179,58 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
-// 3. Books: List all books with category names
+// 3. Public registration. Librarian accounts must be created by an administrator.
+app.post('/api/signup', async (req, res) => {
+    const { name, email, phone, department, userType, password } = req.body;
+    const allowedTypes = ['Student', 'Teacher', 'Non-Teaching Staff', 'Librarian'];
+    const normalizedEmail = String(email || '').trim().toLowerCase();
+
+    if (!String(name || '').trim() || !normalizedEmail || !String(password || '')) {
+        return res.status(400).json({ success: false, message: 'Name, email, and password are required.' });
+    }
+    if (!/^\S+@\S+\.\S+$/.test(normalizedEmail)) {
+        return res.status(400).json({ success: false, message: 'Enter a valid email address.' });
+    }
+    if (!allowedTypes.includes(userType)) {
+        return res.status(400).json({ success: false, message: 'Select a valid member type.' });
+    }
+    if (String(password).length < 6) {
+        return res.status(400).json({ success: false, message: 'Password must contain at least 6 characters.' });
+    }
+
+    try {
+        const [types] = await pool.query('SELECT type_id FROM member_type WHERE type_name = ?', [userType]);
+        const role = userType === 'Librarian' ? 'LIBRARIAN' : 'MEMBER';
+        const [result] = await pool.query(
+            `INSERT INTO member (name, email, phone, department, type_id, password, role)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [String(name).trim(), normalizedEmail, String(phone || '').trim() || null,
+                String(department || '').trim() || null, types[0].type_id, password, role]
+        );
+        const memberId = result.insertId;
+        const formattedId = userType === 'Librarian'
+            ? `LIB${String(memberId).padStart(3, '0')}`
+            : (userType === 'Student' ? `STU${String(memberId).padStart(7, '0')}` : `EMP${String(memberId).padStart(7, '0')}`);
+
+        res.status(201).json({
+            success: true,
+            memberId: memberId,
+            user_id: formattedId,
+            name: String(name).trim(),
+            email: normalizedEmail,
+            userType: userType,
+            message: `Account created successfully! Your Member ID is ${formattedId}. You can now log in using your email (${normalizedEmail}) or ID.`
+        });
+    } catch (err) {
+        if (err.code === 'ER_DUP_ENTRY') {
+            return res.status(409).json({ success: false, message: 'An account with this email already exists.' });
+        }
+        console.error('[API Error] Sign-up failed:', err);
+        res.status(500).json({ success: false, message: 'Unable to create the account. Please try again.' });
+    }
+});
+
+// 4. Books: List all books with category names
 app.get('/api/books', async (req, res) => {
     try {
         const sql = `
@@ -112,9 +242,65 @@ app.get('/api/books', async (req, res) => {
              ORDER BY b.book_id ASC
         `;
         const [rows] = await pool.query(sql);
-        res.json(rows);
+        const mapped = rows.map(b => ({
+            ...b,
+            book_code: `LIB${String(b.book_id).padStart(3, '0')}`,
+            formatted_id: `LIB${String(b.book_id).padStart(3, '0')}`
+        }));
+        res.json(mapped);
     } catch (err) {
         console.error('[API Error] Get books:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 4b. Live Search Books endpoint (by title, author, category, ISBN, shelf, publisher)
+app.get('/api/books/search', async (req, res) => {
+    try {
+        const q = String(req.query.q || '').trim();
+        if (!q) {
+            return res.json([]);
+        }
+        const cleanQ = q.replace(/[-\s]/g, '');
+        const searchTerm = `%${q}%`;
+        const sql = `
+            SELECT b.book_id, b.title, b.author, b.publisher, b.isbn, b.edition,
+                   b.shelf_number, b.is_reference, b.total_copies, b.available_copies,
+                   b.category_id, c.category_name as category
+              FROM book b
+              JOIN category c ON b.category_id = c.category_id
+             WHERE b.title LIKE ?
+                OR b.author LIKE ?
+                OR b.publisher LIKE ?
+                OR b.isbn LIKE ?
+                OR REPLACE(b.isbn, '-', '') LIKE ?
+                OR c.category_name LIKE ?
+                OR b.shelf_number LIKE ?
+                OR CONCAT('LIB', LPAD(b.book_id, 3, '0')) LIKE ?
+                OR CAST(b.book_id AS CHAR) = ?
+             ORDER BY 
+                CASE 
+                    WHEN b.title LIKE ? THEN 1
+                    WHEN b.author LIKE ? THEN 2
+                    WHEN c.category_name LIKE ? THEN 3
+                    ELSE 4
+                END,
+                b.title ASC
+             LIMIT 12
+        `;
+        const [rows] = await pool.query(sql, [
+            searchTerm, searchTerm, searchTerm, searchTerm, `%${cleanQ}%`,
+            searchTerm, searchTerm, searchTerm, q,
+            `${q}%`, `${q}%`, `${q}%`
+        ]);
+        const mapped = rows.map(b => ({
+            ...b,
+            book_code: `LIB${String(b.book_id).padStart(3, '0')}`,
+            formatted_id: `LIB${String(b.book_id).padStart(3, '0')}`
+        }));
+        res.json(mapped);
+    } catch (err) {
+        console.error('[API Error] Search books:', err);
         res.status(500).json({ error: err.message });
     }
 });
@@ -141,8 +327,13 @@ app.get('/api/rules', async (req, res) => {
 
 // 6. User Account Details & Loans
 app.get('/api/my-account/:memberId', async (req, res) => {
-    const memberId = parseInt(req.params.memberId, 10);
     try {
+        const rawMemberId = req.params.memberId;
+        const memberId = await resolveNumericMemberId(rawMemberId);
+        if (!memberId) {
+            return res.status(404).json({ error: 'Member not found' });
+        }
+
         // Member info
         const [members] = await pool.query(
             `SELECT m.member_id, m.name, m.email, m.phone, m.department, m.role, mt.type_name, mt.max_books, mt.loan_days, mt.fine_per_day
@@ -204,8 +395,17 @@ app.post('/api/borrow', async (req, res) => {
     }
 
     try {
-        const [result] = await pool.query('CALL sp_issue_book(?, ?)', [memberId, bookId]);
-        // result[0][0] contains procedure output columns
+        const numMemberId = await resolveNumericMemberId(memberId);
+        const numBookId = await resolveNumericBookId(bookId);
+
+        if (!numMemberId) {
+            return res.status(400).json({ success: false, message: `Member not found: ${memberId}` });
+        }
+        if (!numBookId) {
+            return res.status(400).json({ success: false, message: `Book not found: ${bookId}` });
+        }
+
+        const [result] = await pool.query('CALL sp_issue_book(?, ?)', [numMemberId, numBookId]);
         const output = (result && result[0] && result[0][0]) || {};
         res.json({
             success: true,
@@ -230,7 +430,17 @@ app.post('/api/return', async (req, res) => {
     }
 
     try {
-        const [result] = await pool.query('CALL sp_return_book(?, ?)', [memberId, bookId]);
+        const numMemberId = await resolveNumericMemberId(memberId);
+        const numBookId = await resolveNumericBookId(bookId);
+
+        if (!numMemberId) {
+            return res.status(400).json({ success: false, message: `Member not found: ${memberId}` });
+        }
+        if (!numBookId) {
+            return res.status(400).json({ success: false, message: `Book not found: ${bookId}` });
+        }
+
+        const [result] = await pool.query('CALL sp_return_book(?, ?)', [numMemberId, numBookId]);
         const output = (result && result[0] && result[0][0]) || {};
         res.json({
             success: true,
@@ -251,7 +461,13 @@ app.post('/api/return', async (req, res) => {
 app.post('/api/renew', async (req, res) => {
     const { memberId, bookId } = req.body;
     try {
-        const [result] = await pool.query('CALL sp_renew_book(?, ?)', [memberId, bookId]);
+        const numMemberId = await resolveNumericMemberId(memberId);
+        const numBookId = await resolveNumericBookId(bookId);
+
+        if (!numMemberId) return res.status(400).json({ success: false, message: `Member not found: ${memberId}` });
+        if (!numBookId) return res.status(400).json({ success: false, message: `Book not found: ${bookId}` });
+
+        const [result] = await pool.query('CALL sp_renew_book(?, ?)', [numMemberId, numBookId]);
         const output = (result && result[0] && result[0][0]) || {};
         res.json({
             success: true,
@@ -270,7 +486,9 @@ app.post('/api/renew', async (req, res) => {
 app.post('/api/pay-fine', async (req, res) => {
     const { memberId } = req.body;
     try {
-        await pool.query('CALL sp_pay_fine(?)', [memberId]);
+        const numMemberId = await resolveNumericMemberId(memberId);
+        if (!numMemberId) return res.status(400).json({ success: false, message: `Member not found: ${memberId}` });
+        await pool.query('CALL sp_pay_fine(?)', [numMemberId]);
         res.json({ success: true, message: 'Fines cleared successfully' });
     } catch (err) {
         res.status(400).json({ success: false, message: err.sqlMessage || err.message });
@@ -288,6 +506,108 @@ app.get('/api/librarian/members', async (req, res) => {
              ORDER BY m.member_id ASC
         `;
         const [rows] = await pool.query(sql);
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 12. Librarian: Per-member borrowing details.
+app.get('/api/librarian/borrowing-details', async (req, res) => {
+    try {
+        const [rows] = await pool.query(`
+            SELECT m.member_id, m.name, m.email, m.department, mt.type_name,
+                   COUNT(br.borrow_id) AS total_borrowed,
+                   COALESCE(SUM(br.return_date IS NULL), 0) AS currently_borrowed,
+                   COALESCE(SUM(br.return_date IS NOT NULL), 0) AS returned_books,
+                   COALESCE(SUM(br.return_date IS NULL AND br.due_date < CURDATE()), 0) AS overdue_books,
+                   COALESCE(SUM(CASE WHEN br.fine_paid = FALSE THEN br.fine_amount ELSE 0 END), 0) AS unpaid_fines
+              FROM member m
+              JOIN member_type mt ON mt.type_id = m.type_id
+              LEFT JOIN borrows br ON br.member_id = m.member_id
+             WHERE m.role <> 'LIBRARIAN'
+             GROUP BY m.member_id, m.name, m.email, m.department, mt.type_name
+             ORDER BY currently_borrowed DESC, total_borrowed DESC, m.name ASC
+        `);
+        res.json(rows);
+    } catch (err) {
+        console.error('[API Error] Borrowing details:', err);
+        res.status(500).json({ error: 'Unable to load borrowing details.' });
+    }
+});
+
+// 13. Librarian: Currently issued books
+app.get('/api/librarian/issued', async (req, res) => {
+    try {
+        const [rows] = await pool.query(`
+            SELECT br.borrow_id, br.member_id, m.name as member_name, mt.type_name as member_type,
+                   m.department, bk.book_id, bk.title as book_title, bk.isbn,
+                   CONCAT('LIB', LPAD(bk.book_id, 3, '0')) as book_code,
+                   DATE_FORMAT(br.issue_date, '%Y-%m-%d') as issue_date,
+                   DATE_FORMAT(br.due_date, '%Y-%m-%d') as due_date,
+                   br.renew_count,
+                   GREATEST(DATEDIFF(CURDATE(), br.due_date), 0) AS days_overdue,
+                   IF(br.due_date < CURDATE(), 'Overdue', 'Issued') as status
+              FROM borrows br
+              JOIN member m ON br.member_id = m.member_id
+              JOIN member_type mt ON m.type_id = mt.type_id
+              JOIN book bk ON br.book_id = bk.book_id
+             WHERE br.return_date IS NULL
+             ORDER BY br.issue_date DESC
+        `);
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 14. Librarian: Overdue books
+app.get('/api/librarian/overdue', async (req, res) => {
+    try {
+        const [rows] = await pool.query(`
+            SELECT br.borrow_id, br.member_id, m.name as member_name, mt.type_name as member_type,
+                   m.department, bk.book_id, bk.title as book_title, bk.isbn,
+                   CONCAT('LIB', LPAD(bk.book_id, 3, '0')) as book_code,
+                   DATE_FORMAT(br.issue_date, '%Y-%m-%d') as issue_date,
+                   DATE_FORMAT(br.due_date, '%Y-%m-%d') as due_date,
+                   DATEDIFF(CURDATE(), br.due_date) AS days_overdue,
+                   (DATEDIFF(CURDATE(), br.due_date) * mt.fine_per_day) AS fine_accrued,
+                   'Overdue' as status
+              FROM borrows br
+              JOIN member m ON br.member_id = m.member_id
+              JOIN member_type mt ON m.type_id = mt.type_id
+              JOIN book bk ON br.book_id = bk.book_id
+             WHERE br.return_date IS NULL AND br.due_date < CURDATE()
+             ORDER BY days_overdue DESC
+        `);
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 15. Librarian: All transactions
+app.get('/api/librarian/transactions', async (req, res) => {
+    try {
+        const [rows] = await pool.query(`
+            SELECT br.borrow_id, br.member_id, m.name as member_name, mt.type_name as member_type,
+                   bk.book_id, bk.title as book_title,
+                   CONCAT('LIB', LPAD(bk.book_id, 3, '0')) as book_code,
+                   DATE_FORMAT(br.issue_date, '%Y-%m-%d') as issue_date,
+                   DATE_FORMAT(br.due_date, '%Y-%m-%d') as due_date,
+                   DATE_FORMAT(br.return_date, '%Y-%m-%d') as return_date,
+                   br.renew_count, br.fine_amount, br.fine_paid,
+                   CASE
+                       WHEN br.return_date IS NOT NULL THEN 'Returned'
+                       WHEN br.due_date < CURDATE() THEN 'Overdue'
+                       ELSE 'Issued'
+                   END as status
+              FROM borrows br
+              JOIN member m ON br.member_id = m.member_id
+              JOIN member_type mt ON m.type_id = mt.type_id
+              JOIN book bk ON br.book_id = bk.book_id
+             ORDER BY br.borrow_id DESC
+        `);
         res.json(rows);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -408,13 +728,22 @@ app.get('/api/librarian/reports', async (req, res) => {
 
 // Fallback for root /
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
+    const publicIndex = path.join(__dirname, 'public', 'index.html');
+    if (require('fs').existsSync(publicIndex)) {
+        res.sendFile(publicIndex);
+    } else {
+        res.sendFile(path.join(__dirname, 'index.html'));
+    }
 });
 
-// Start Server
-app.listen(PORT, async () => {
-    console.log(`====================================================`);
-    console.log(`🚀 College Library Portal running at: http://localhost:${PORT}`);
-    console.log(`====================================================`);
-    await testConnection();
-});
+// Start Server locally
+if (require.main === module || (!process.env.VERCEL && !process.env.AWS_LAMBDA_FUNCTION_NAME)) {
+    app.listen(PORT, async () => {
+        console.log(`====================================================`);
+        console.log(`🚀 College Library Portal running at: http://localhost:${PORT}`);
+        console.log(`====================================================`);
+        await testConnection();
+    });
+}
+
+module.exports = app;

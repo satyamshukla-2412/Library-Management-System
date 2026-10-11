@@ -537,11 +537,30 @@ let transactions = [
 // ============================================================
 
 function getBookById(bookId) {
-    return books.find(b => b.book_id === bookId);
+    if (!bookId) return null;
+    const str = String(bookId).trim().toLowerCase();
+    return books.find(b =>
+        String(b.book_id || '').toLowerCase() === str ||
+        String(b.book_code || '').toLowerCase() === str ||
+        String(b.isbn || '').toLowerCase() === str ||
+        ('lib' + String(b.book_id).padStart(3, '0')).toLowerCase() === str
+    );
 }
 
 function getUserById(userId) {
-    return users.find(u => u.user_id === userId);
+    if (!userId) return null;
+    const str = String(userId).trim().toLowerCase();
+    const cleanNum = parseInt(str.replace(/\D/g, ''), 10);
+    return users.find(u => {
+        if (!u) return false;
+        if (String(u.user_id || '').toLowerCase() === str) return true;
+        if (String(u.member_id || '').toLowerCase() === str) return true;
+        if (String(u.numeric_id || '').toLowerCase() === str) return true;
+        if (String(u.email || '').toLowerCase() === str) return true;
+        if (String(u.name || '').toLowerCase() === str) return true;
+        if (!isNaN(cleanNum) && (Number(u.member_id) === cleanNum || Number(u.numeric_id) === cleanNum)) return true;
+        return false;
+    });
 }
 
 function getRulesForUserType(userType) {
@@ -549,15 +568,36 @@ function getRulesForUserType(userType) {
 }
 
 function getTransactionsForUser(userId) {
-    return transactions.filter(t => t.user_id === userId);
+    if (!userId) return [];
+    const str = String(userId).trim().toLowerCase();
+    const cleanNum = parseInt(str.replace(/\D/g, ''), 10);
+    const u = getUserById(userId);
+    const targetMemberId = u ? (u.member_id != null ? Number(u.member_id) : (u.numeric_id != null ? Number(u.numeric_id) : null)) : (!isNaN(cleanNum) ? cleanNum : null);
+    const targetUserId = u ? String(u.user_id || '').toLowerCase() : str;
+    const targetEmail = u ? String(u.email || '').toLowerCase() : '';
+    const targetName = u ? String(u.name || '').toLowerCase() : '';
+
+    return transactions.filter(t => {
+        if (!t) return false;
+        const tUser = String(t.user_id || '').toLowerCase();
+        const tMemberId = t.member_id != null ? Number(t.member_id) : null;
+        const tName = String(t.member_name || '').toLowerCase();
+
+        if (tUser === str || tUser === targetUserId) return true;
+        if (targetMemberId != null && tMemberId === targetMemberId) return true;
+        if (targetEmail && (tUser === targetEmail || String(t.email || '').toLowerCase() === targetEmail)) return true;
+        if (targetName && (tName === targetName || tUser === targetName)) return true;
+        if (!isNaN(cleanNum) && tMemberId === cleanNum) return true;
+        return false;
+    });
 }
 
 function getActiveTransactionsForUser(userId) {
-    return transactions.filter(t => t.user_id === userId && (t.status === "Issued" || t.status === "Overdue"));
+    return getTransactionsForUser(userId).filter(t => t.status === "Issued" || t.status === "Overdue");
 }
 
 function getReturnedTransactionsForUser(userId) {
-    return transactions.filter(t => t.user_id === userId && t.status === "Returned");
+    return getTransactionsForUser(userId).filter(t => t.status === "Returned");
 }
 
 function getAllIssuedBooks() {
@@ -569,15 +609,87 @@ function getOverdueBooks() {
 }
 
 function searchBooks(query) {
-    const q = query.toLowerCase().trim();
-    if (!q) return books;
-    return books.filter(b =>
-        b.title.toLowerCase().includes(q) ||
-        b.author.toLowerCase().includes(q) ||
-        b.isbn.includes(q) ||
-        b.category.toLowerCase().includes(q) ||
-        b.book_id.toLowerCase().includes(q)
-    );
+    const raw = String(query || '').trim();
+    if (!raw) return books;
+    const q = raw.toLowerCase();
+    const cleanQ = q.replace(/[-\s]/g, '');
+    const words = q.split(/\s+/).filter(Boolean);
+
+    return books.filter(b => {
+        const title = (b.title || '').toLowerCase();
+        const author = (b.author || '').toLowerCase();
+        const category = (b.category || '').toLowerCase();
+        const isbn = (b.isbn || '').toLowerCase();
+        const cleanIsbn = isbn.replace(/[-\s]/g, '');
+        const bookId = (b.book_id || b.book_code || '').toLowerCase();
+        const publisher = (b.publisher || '').toLowerCase();
+        const shelf = (b.shelf_number || '').toLowerCase();
+        const edition = (b.edition || '').toLowerCase();
+
+        // 1. Single direct substring match
+        if (title.includes(q) || author.includes(q) || category.includes(q) ||
+            bookId.includes(q) || publisher.includes(q) || shelf.includes(q) ||
+            edition.includes(q) || isbn.includes(q) || (cleanQ.length >= 3 && cleanIsbn.includes(cleanQ))) {
+            return true;
+        }
+
+        // 2. Multi-word search: all words must match at least one field
+        if (words.length > 1) {
+            const allWordsMatch = words.every(w => {
+                const cleanW = w.replace(/[-\s]/g, '');
+                return title.includes(w) || author.includes(w) || category.includes(w) ||
+                       bookId.includes(w) || publisher.includes(w) || shelf.includes(w) ||
+                       isbn.includes(w) || (cleanW.length >= 3 && cleanIsbn.includes(cleanW));
+            });
+            if (allWordsMatch) return true;
+        }
+
+        return false;
+    });
+}
+
+// Get rich suggestion objects with highlight metadata
+function getSearchSuggestions(query, limit = 7) {
+    const raw = String(query || '').trim();
+    if (!raw || raw.length < 1) return [];
+
+    const matches = searchBooks(raw);
+    const q = raw.toLowerCase();
+    const cleanQ = q.replace(/[-\s]/g, '');
+
+    return matches.slice(0, limit).map(book => {
+        let matchReason = "Title";
+        let matchDetail = book.title;
+
+        if (book.title.toLowerCase().includes(q)) {
+            matchReason = "Title";
+            matchDetail = book.title;
+        } else if (book.author.toLowerCase().includes(q)) {
+            matchReason = "Author";
+            matchDetail = book.author;
+        } else if (book.category.toLowerCase().includes(q)) {
+            matchReason = "Category";
+            matchDetail = book.category;
+        } else if (book.isbn.toLowerCase().includes(q) || book.isbn.replace(/[-\s]/g, '').includes(cleanQ)) {
+            matchReason = "ISBN";
+            matchDetail = book.isbn;
+        } else if ((book.book_id && book.book_id.toLowerCase().includes(q)) || (book.book_code && book.book_code.toLowerCase().includes(q))) {
+            matchReason = "Book ID";
+            matchDetail = book.book_id || book.book_code;
+        } else if (book.shelf_number && book.shelf_number.toLowerCase().includes(q)) {
+            matchReason = "Shelf";
+            matchDetail = book.shelf_number;
+        } else if (book.publisher && book.publisher.toLowerCase().includes(q)) {
+            matchReason = "Publisher";
+            matchDetail = book.publisher;
+        }
+
+        return {
+            book: book,
+            matchReason: matchReason,
+            matchDetail: matchDetail
+        };
+    });
 }
 
 function filterBooks(bookList, filters) {
@@ -765,3 +877,92 @@ function resetDatabase() {
         console.error("Error loading library data from localStorage:", err);
     }
 })();
+
+// ============================================================
+// Synchronize in-memory cache with live MySQL Database
+// ============================================================
+async function syncDatabaseWithBackend() {
+    if (typeof LibraryAPI === "undefined") return;
+    const isOnline = await LibraryAPI.checkBackend();
+    if (!isOnline) return;
+
+    try {
+        const remoteBooks = await LibraryAPI.getBooks();
+        if (Array.isArray(remoteBooks) && remoteBooks.length > 0) {
+            books = remoteBooks.map(b => ({
+                book_id: b.formatted_id || `LIB${String(b.book_id).padStart(3, '0')}`,
+                numeric_id: b.book_id,
+                title: b.title,
+                author: b.author,
+                isbn: b.isbn,
+                publisher: b.publisher,
+                category: b.category,
+                category_id: b.category_id,
+                edition: b.edition,
+                total_copies: Number(b.total_copies),
+                available_copies: Number(b.available_copies),
+                shelf_number: b.shelf_number
+            }));
+            saveBooks();
+        }
+
+        const remoteMembers = await LibraryAPI.getMembers();
+        if (Array.isArray(remoteMembers) && remoteMembers.length > 0) {
+            users = remoteMembers.map(m => {
+                const formattedId = m.type_name === 'Librarian' ? `LIB${String(m.member_id).padStart(3, '0')}` :
+                    (m.type_name === 'Student' ? `STU${String(m.member_id).padStart(7, '0')}` : `EMP${String(m.member_id).padStart(7, '0')}`);
+                return {
+                    user_id: formattedId,
+                    numeric_id: m.member_id,
+                    member_id: m.member_id,
+                    name: m.name,
+                    email: m.email,
+                    phone: m.phone || '—',
+                    department: m.department || 'General',
+                    user_type: m.type_name,
+                    role: m.role,
+                    active_loans: Number(m.active_loans || 0)
+                };
+            });
+            saveUsers();
+        }
+
+        const remoteTxns = await LibraryAPI.getTransactions();
+        if (Array.isArray(remoteTxns) && remoteTxns.length > 0) {
+            transactions = remoteTxns.map(t => {
+                const formattedUserId = t.member_type === 'Librarian' ? `LIB${String(t.member_id).padStart(3, '0')}` :
+                    (t.member_type === 'Student' ? `STU${String(t.member_id).padStart(7, '0')}` : `EMP${String(t.member_id).padStart(7, '0')}`);
+                return {
+                    transaction_id: `TXN${String(t.borrow_id).padStart(3, '0')}`,
+                    borrow_id: t.borrow_id,
+                    user_id: formattedUserId,
+                    member_id: t.member_id,
+                    member_name: t.member_name,
+                    book_id: t.book_code || `LIB${String(t.book_id).padStart(3, '0')}`,
+                    book_title: t.book_title,
+                    issue_date: t.issue_date,
+                    due_date: t.due_date,
+                    return_date: t.return_date,
+                    fine: Number(t.fine_amount || 0),
+                    status: t.status
+                };
+            });
+            saveTransactions();
+        }
+    } catch (err) {
+        console.warn("[Data Sync] Error syncing with database:", err);
+    }
+}
+
+window.syncDatabaseWithBackend = syncDatabaseWithBackend;
+
+// Trigger sync on load
+if (typeof document !== "undefined") {
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", function () {
+            syncDatabaseWithBackend();
+        });
+    } else {
+        syncDatabaseWithBackend();
+    }
+}

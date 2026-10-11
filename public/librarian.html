@@ -28,7 +28,7 @@
                     <li class="nav-login-link"><a href="login.html" class="btn-login">Login</a></li>
                     <li class="nav-account-link" style="display:none"><a href="account.html">My Account</a></li>
                     <li class="nav-librarian-link" style="display:none"><a href="librarian.html">Dashboard</a></li>
-                    <li class="nav-account-link" style="display:none"><a href="#" onclick="logoutUser(); window.location.href='index.html'; return false;">Logout</a></li>
+                    <li class="nav-logout-link" style="display:none"><a href="#" onclick="logoutUser(); window.location.href='index.html'; return false;">Logout</a></li>
                 </ul>
             </nav>
         </div>
@@ -72,6 +72,7 @@
                             <li><a href="#" data-section="return-book-lib">Return Book</a></li>
                             <li><a href="#" data-section="view-issued">Issued Books</a></li>
                             <li><a href="#" data-section="view-overdue">Overdue Books</a></li>
+                            <li><a href="#" data-section="borrowing-details">Borrowing Details</a></li>
                         </ul>
                         <div class="sidebar-section-title">Reports</div>
                         <ul class="sidebar-nav">
@@ -178,6 +179,7 @@
                                                 <th>Department</th>
                                                 <th>Email</th>
                                                 <th>Phone</th>
+                                                <th>Books Borrowed</th>
                                                 <th>Actions</th>
                                             </tr>
                                         </thead>
@@ -343,6 +345,24 @@
                             </div>
                         </div>
 
+                        <!-- ====== BORROWING DETAILS ====== -->
+                        <div class="lib-section" id="sec-borrowing-details" style="display:none">
+                            <div class="panel">
+                                <div class="panel-header">
+                                    <h3>Member Borrowing Details</h3>
+                                    <input type="text" id="borrowing-details-search" placeholder="Search name, email, or type..." style="padding:7px 12px; border:1px solid #ccc; border-radius:4px; font-size:0.85rem; width:250px;">
+                                </div>
+                                <p class="mb-10">See how many books each member has borrowed, returned, currently holds, and owes in fines.</p>
+                                <div class="table-wrapper">
+                                    <table>
+                                        <thead><tr><th>Member</th><th>Type</th><th>Department</th><th>Total Borrowed</th><th>Currently Borrowed</th><th>Returned</th><th>Overdue</th><th>Unpaid Fines</th></tr></thead>
+                                        <tbody id="borrowing-details-body"></tbody>
+                                    </table>
+                                </div>
+                                <div class="no-data" id="no-borrowing-details" style="display:none">No member borrowing records found.</div>
+                            </div>
+                        </div>
+
                         <!-- ====== REPORTS ====== -->
                         <div class="lib-section" id="sec-reports" style="display:none">
                             <div class="panel">
@@ -439,11 +459,50 @@
                 else if (sectionId === "manage-members") renderLibMembers();
                 else if (sectionId === "view-issued") renderIssuedBooks();
                 else if (sectionId === "view-overdue") renderOverdueBooks();
+                else if (sectionId === "borrowing-details") loadBorrowingDetails();
                 else if (sectionId === "reports") renderReports();
             }
 
+            // ====== LIVE MEMBER BORROWING DETAILS ======
+            var borrowingDetails = [];
+            function escapeHTML(value) {
+                return String(value == null ? '' : value).replace(/[&<>'"]/g, function (character) {
+                    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[character];
+                });
+            }
+            function renderBorrowingDetails(query) {
+                var term = String(query || '').trim().toLowerCase();
+                var rows = borrowingDetails.filter(function (member) {
+                    return !term || [member.name, member.email, member.type_name, member.department].join(' ').toLowerCase().includes(term);
+                });
+                var tbody = document.getElementById('borrowing-details-body');
+                tbody.innerHTML = rows.map(function (member) {
+                    return '<tr><td><strong>' + escapeHTML(member.name) + '</strong><br><small>' + escapeHTML(member.email) + '</small></td>' +
+                        '<td>' + escapeHTML(member.type_name) + '</td><td>' + escapeHTML(member.department || '—') + '</td>' +
+                        '<td>' + member.total_borrowed + '</td><td>' + member.currently_borrowed + '</td><td>' + member.returned_books + '</td>' +
+                        '<td>' + member.overdue_books + '</td><td>₹' + Number(member.unpaid_fines || 0).toFixed(2) + '</td></tr>';
+                }).join('');
+                document.getElementById('no-borrowing-details').style.display = rows.length ? 'none' : 'block';
+            }
+            async function loadBorrowingDetails() {
+                var tbody = document.getElementById('borrowing-details-body');
+                tbody.innerHTML = '<tr><td colspan="8">Loading borrowing details…</td></tr>';
+                try {
+                    var response = await fetch('/api/librarian/borrowing-details');
+                    if (!response.ok) throw new Error('Request failed');
+                    borrowingDetails = await response.json();
+                    renderBorrowingDetails(document.getElementById('borrowing-details-search').value);
+                } catch (_) {
+                    tbody.innerHTML = '<tr><td colspan="8">Unable to load borrowing details. Please try again.</td></tr>';
+                }
+            }
+            document.getElementById('borrowing-details-search').addEventListener('input', function () { renderBorrowingDetails(this.value); });
+
             // ====== MANAGE BOOKS ======
-            function renderLibBooks(query) {
+            async function renderLibBooks(query) {
+                if (typeof syncDatabaseWithBackend === "function") {
+                    await syncDatabaseWithBackend();
+                }
                 var list = query ? searchBooks(query) : books;
                 var tbody = document.getElementById("lib-books-body");
                 tbody.innerHTML = "";
@@ -481,7 +540,7 @@
                     '<div class="form-group"><label>Title</label><input type="text" id="eb-title" value="' + book.title + '"></div>' +
                     '<div class="form-group"><label>Author</label><input type="text" id="eb-author" value="' + book.author + '"></div>' +
                     '<div class="form-group"><label>ISBN</label><input type="text" id="eb-isbn" value="' + book.isbn + '"></div>' +
-                    '<div class="form-group"><label>Publisher</label><input type="text" id="eb-publisher" value="' + book.publisher + '"></div>' +
+                    '<div class="form-group"><label>Publisher</label><input type="text" id="eb-publisher" value="' + (book.publisher || '') + '"></div>' +
                     '<div class="form-group"><label>Category</label><input type="text" id="eb-category" value="' + book.category + '"></div>' +
                     '<div class="form-group"><label>Edition</label><input type="text" id="eb-edition" value="' + book.edition + '"></div>' +
                     '<div class="form-row">' +
@@ -496,21 +555,34 @@
 
                 showModal("Edit Book — " + book.book_id, bodyHTML, footerHTML);
 
-                document.getElementById("save-book-btn").addEventListener("click", function () {
-                    book.title = document.getElementById("eb-title").value;
-                    book.author = document.getElementById("eb-author").value;
-                    book.isbn = document.getElementById("eb-isbn").value;
-                    book.publisher = document.getElementById("eb-publisher").value;
-                    book.category = document.getElementById("eb-category").value;
-                    book.edition = document.getElementById("eb-edition").value;
-                    book.total_copies = parseInt(document.getElementById("eb-total").value) || book.total_copies;
-                    book.available_copies = parseInt(document.getElementById("eb-available").value) || book.available_copies;
-                    book.shelf_number = document.getElementById("eb-shelf").value;
+                document.getElementById("save-book-btn").addEventListener("click", async function () {
+                    var updated = {
+                        title: document.getElementById("eb-title").value,
+                        author: document.getElementById("eb-author").value,
+                        isbn: document.getElementById("eb-isbn").value,
+                        publisher: document.getElementById("eb-publisher").value,
+                        category: document.getElementById("eb-category").value,
+                        edition: document.getElementById("eb-edition").value,
+                        total_copies: parseInt(document.getElementById("eb-total").value) || book.total_copies,
+                        available_copies: parseInt(document.getElementById("eb-available").value) || book.available_copies,
+                        shelf_number: document.getElementById("eb-shelf").value
+                    };
 
-                    if (typeof saveBooks === "function") saveBooks();
-                    closeModal();
-                    renderLibBooks();
-                    showToast("Book updated successfully.", "success");
+                    const targetId = book.numeric_id || parseInt(String(book.book_id).replace(/\D/g, ''), 10) || book.book_id;
+                    const res = await LibraryAPI.updateBook(targetId, updated);
+                    if (res && res.success) {
+                        await syncDatabaseWithBackend();
+                        closeModal();
+                        renderLibBooks();
+                        showToast("Book updated in database successfully.", "success");
+                    } else {
+                        // local fallback if server unavailable
+                        Object.assign(book, updated);
+                        if (typeof saveBooks === "function") saveBooks();
+                        closeModal();
+                        renderLibBooks();
+                        showToast("Book updated successfully.", "success");
+                    }
                 });
             };
 
@@ -519,13 +591,23 @@
                 var book = getBookById(bookId);
                 if (!book) return;
 
-                showConfirm("Are you sure you want to remove <strong>" + book.title + "</strong> (" + book.book_id + ") from the library?", function () {
-                    var idx = books.findIndex(function (b) { return b.book_id === bookId; });
-                    if (idx !== -1) {
-                        books.splice(idx, 1);
-                        if (typeof saveBooks === "function") saveBooks();
+                showConfirm("Are you sure you want to remove <strong>" + book.title + "</strong> (" + book.book_id + ") from the library database?", async function () {
+                    const targetId = book.numeric_id || parseInt(String(book.book_id).replace(/\D/g, ''), 10) || book.book_id;
+                    const res = await LibraryAPI.deleteBook(targetId);
+                    if (res && res.success) {
+                        await syncDatabaseWithBackend();
                         renderLibBooks();
-                        showToast("Book removed from library.", "success");
+                        showToast("Book deleted from database successfully.", "success");
+                    } else if (res && res.message) {
+                        showToast(res.message, "error");
+                    } else {
+                        var idx = books.findIndex(function (b) { return b.book_id === bookId; });
+                        if (idx !== -1) {
+                            books.splice(idx, 1);
+                            if (typeof saveBooks === "function") saveBooks();
+                            renderLibBooks();
+                            showToast("Book removed from library.", "success");
+                        }
                     }
                 });
             };
@@ -545,7 +627,7 @@
             otherOpt.textContent = "Other (type below)";
             catSelect.appendChild(otherOpt);
 
-            document.getElementById("add-book-form").addEventListener("submit", function (e) {
+            document.getElementById("add-book-form").addEventListener("submit", async function (e) {
                 e.preventDefault();
 
                 var category = document.getElementById("ab-category").value;
@@ -554,8 +636,7 @@
                     if (!category) return;
                 }
 
-                var newBook = {
-                    book_id: generateBookId(),
+                var bookData = {
                     title: document.getElementById("ab-title").value.trim(),
                     author: document.getElementById("ab-author").value.trim(),
                     isbn: document.getElementById("ab-isbn").value.trim(),
@@ -567,14 +648,26 @@
                     shelf_number: document.getElementById("ab-shelf").value.trim() || "—"
                 };
 
-                books.push(newBook);
-                if (typeof saveBooks === "function") saveBooks();
-                this.reset();
-                showToast("Book added successfully! ID: " + newBook.book_id, "success");
+                const res = await LibraryAPI.addBook(bookData);
+                if (res && res.success) {
+                    await syncDatabaseWithBackend();
+                    this.reset();
+                    renderLibBooks();
+                    showToast("Book saved to database! ID: LIB" + String(res.book_id).padStart(3, '0'), "success");
+                } else {
+                    var newBook = Object.assign({ book_id: generateBookId() }, bookData);
+                    books.push(newBook);
+                    if (typeof saveBooks === "function") saveBooks();
+                    this.reset();
+                    showToast("Book added locally! ID: " + newBook.book_id, "success");
+                }
             });
 
             // ====== MANAGE MEMBERS ======
-            function renderLibMembers(query) {
+            async function renderLibMembers(query) {
+                if (typeof syncDatabaseWithBackend === "function") {
+                    await syncDatabaseWithBackend();
+                }
                 var list = users.filter(function (u) { return u.user_type !== "Librarian"; });
                 if (query) {
                     var q = query.toLowerCase();
@@ -582,7 +675,8 @@
                         return u.name.toLowerCase().includes(q) ||
                             u.user_id.toLowerCase().includes(q) ||
                             u.department.toLowerCase().includes(q) ||
-                            u.user_type.toLowerCase().includes(q);
+                            u.user_type.toLowerCase().includes(q) ||
+                            (u.email && u.email.toLowerCase().includes(q));
                     });
                 }
 
@@ -590,14 +684,20 @@
                 tbody.innerHTML = "";
 
                 list.forEach(function (u) {
+                    var rules = getRulesForUserType(u.user_type);
+                    var activeCount = u.active_loans != null ? u.active_loans : getActiveTransactionsForUser(u.user_id).length;
+                    var maxCount = rules ? rules.maximum_books : 3;
+                    var badgeClass = activeCount > 0 ? "badge-yellow" : "badge-gray";
+
                     var tr = document.createElement("tr");
                     tr.innerHTML =
-                        '<td>' + u.user_id + '</td>' +
-                        '<td>' + u.name + '</td>' +
-                        '<td><span class="badge badge-blue">' + u.user_type + '</span></td>' +
-                        '<td>' + u.department + '</td>' +
-                        '<td>' + u.email + '</td>' +
-                        '<td>' + u.phone + '</td>' +
+                        '<td><strong>' + escapeHTML(u.user_id) + '</strong></td>' +
+                        '<td>' + escapeHTML(u.name) + '</td>' +
+                        '<td><span class="badge badge-blue">' + escapeHTML(u.user_type) + '</span></td>' +
+                        '<td>' + escapeHTML(u.department) + '</td>' +
+                        '<td>' + escapeHTML(u.email) + '</td>' +
+                        '<td>' + escapeHTML(u.phone) + '</td>' +
+                        '<td><span class="badge ' + badgeClass + '">' + activeCount + ' / ' + maxCount + '</span></td>' +
                         '<td><button class="btn btn-sm btn-outline" onclick="viewMemberDetails(\'' + u.user_id + '\')">View</button></td>';
                     tbody.appendChild(tr);
                 });
@@ -607,34 +707,94 @@
                 renderLibMembers(this.value);
             });
 
-            // View Member Details
-            window.viewMemberDetails = function (userId) {
+            // View Member Details (Live MySQL synced)
+            window.viewMemberDetails = async function (userId) {
                 var u = getUserById(userId);
-                if (!u) return;
+                var memberLookup = u ? (u.member_id || u.numeric_id || u.user_id) : userId;
 
-                var activeBooks = getActiveTransactionsForUser(userId);
-                var rules = getRulesForUserType(u.user_type);
+                // Query live account data directly from MySQL
+                var liveData = null;
+                if (typeof LibraryAPI !== "undefined" && typeof LibraryAPI.getAccountData === "function") {
+                    try {
+                        liveData = await LibraryAPI.getAccountData(memberLookup);
+                    } catch (e) {
+                        console.warn("Could not fetch live account data:", e);
+                    }
+                }
+
+                var activeBooks = [];
+                var historyBooks = [];
+                var memberInfo = u;
+                var rules = u ? getRulesForUserType(u.user_type) : null;
+
+                if (liveData && liveData.member) {
+                    memberInfo = Object.assign({}, u || {}, {
+                        name: liveData.member.name,
+                        email: liveData.member.email,
+                        phone: liveData.member.phone || (u ? u.phone : '—'),
+                        department: liveData.member.department,
+                        user_type: liveData.member.type_name,
+                        user_id: u ? u.user_id : ('STU' + String(liveData.member.member_id).padStart(7, '0'))
+                    });
+                    activeBooks = liveData.activeLoans || [];
+                    historyBooks = liveData.history || [];
+                    rules = { maximum_books: liveData.member.max_books, borrowing_days: liveData.member.loan_days };
+                } else {
+                    activeBooks = getActiveTransactionsForUser(userId);
+                    historyBooks = getReturnedTransactionsForUser(userId);
+                }
+
+                if (!memberInfo) {
+                    showToast("Member not found: " + userId, "error");
+                    return;
+                }
+
+                var totalLifetime = activeBooks.length + historyBooks.length;
+                var maxLimitText = rules ? ' / ' + rules.maximum_books : '';
 
                 var bodyHTML = '<table class="detail-table">' +
-                    '<tr><td>User ID</td><td>' + u.user_id + '</td></tr>' +
-                    '<tr><td>Name</td><td>' + u.name + '</td></tr>' +
-                    '<tr><td>Type</td><td>' + u.user_type + '</td></tr>' +
-                    '<tr><td>Department</td><td>' + u.department + '</td></tr>' +
-                    '<tr><td>Email</td><td>' + u.email + '</td></tr>' +
-                    '<tr><td>Phone</td><td>' + u.phone + '</td></tr>' +
-                    '<tr><td>Books Borrowed</td><td>' + activeBooks.length + (rules ? ' / ' + rules.maximum_books : '') + '</td></tr>' +
+                    '<tr><td>User ID</td><td><strong>' + escapeHTML(memberInfo.user_id) + '</strong></td></tr>' +
+                    '<tr><td>Name</td><td>' + escapeHTML(memberInfo.name) + '</td></tr>' +
+                    '<tr><td>Type</td><td><span class="badge badge-blue">' + escapeHTML(memberInfo.user_type) + '</span></td></tr>' +
+                    '<tr><td>Department</td><td>' + escapeHTML(memberInfo.department || '—') + '</td></tr>' +
+                    '<tr><td>Email</td><td>' + escapeHTML(memberInfo.email) + '</td></tr>' +
+                    '<tr><td>Phone</td><td>' + escapeHTML(memberInfo.phone || '—') + '</td></tr>' +
+                    '<tr><td>Books Borrowed</td><td><strong style="color:var(--primary); font-size:1.05rem">' + activeBooks.length + maxLimitText + '</strong></td></tr>' +
+                    '<tr><td>Total Lifetime Loans</td><td>' + totalLifetime + ' (' + historyBooks.length + ' returned)</td></tr>' +
                     '</table>';
 
                 if (activeBooks.length > 0) {
-                    bodyHTML += '<h4 style="margin:16px 0 8px">Currently Borrowed:</h4><ul style="padding-left:18px">';
-                    activeBooks.forEach(function (t) {
-                        var book = getBookById(t.book_id);
-                        bodyHTML += '<li style="margin-bottom:4px">' + (book ? book.title : t.book_id) + ' — due ' + formatDate(t.due_date) + '</li>';
+                    bodyHTML += '<h4 style="margin:20px 0 10px; color:#1e293b; font-size:0.95rem;">Currently Borrowed Books (' + activeBooks.length + '):</h4>';
+                    bodyHTML += '<div class="table-wrapper" style="margin-bottom:12px"><table>' +
+                        '<thead><tr><th>Book Title</th><th>Issue Date</th><th>Due Date</th><th>Status</th></tr></thead><tbody>';
+                    activeBooks.forEach(function (loan) {
+                        var statusClass = loan.status === 'Overdue' ? 'status-overdue' : 'status-issued';
+                        bodyHTML += '<tr>' +
+                            '<td><strong>' + escapeHTML(loan.title || loan.book_title || loan.book_id) + '</strong><br><small style="color:#64748b">' + escapeHTML(loan.author || loan.isbn || '') + '</small></td>' +
+                            '<td>' + formatDate(loan.issue_date) + '</td>' +
+                            '<td>' + formatDate(loan.due_date) + '</td>' +
+                            '<td><span class="status-badge ' + statusClass + '">' + escapeHTML(loan.status) + '</span></td>' +
+                        '</tr>';
                     });
-                    bodyHTML += '</ul>';
+                    bodyHTML += '</tbody></table></div>';
                 }
 
-                showModal("Member Details", bodyHTML, '<button class="btn btn-primary" onclick="closeModal()">Close</button>');
+                if (historyBooks.length > 0) {
+                    bodyHTML += '<h4 style="margin:20px 0 10px; color:#1e293b; font-size:0.95rem;">Returned History (' + historyBooks.length + '):</h4>';
+                    bodyHTML += '<div class="table-wrapper"><table>' +
+                        '<thead><tr><th>Book Title</th><th>Issue Date</th><th>Return Date</th><th>Fine</th></tr></thead><tbody>';
+                    historyBooks.forEach(function (h) {
+                        bodyHTML += '<tr>' +
+                            '<td>' + escapeHTML(h.title || h.book_title || h.book_id) + '</td>' +
+                            '<td>' + formatDate(h.issue_date) + '</td>' +
+                            '<td>' + formatDate(h.return_date) + '</td>' +
+                            '<td>₹' + Number(h.fine_amount || 0).toFixed(2) + '</td>' +
+                        '</tr>';
+                    });
+                    bodyHTML += '</tbody></table></div>';
+                }
+
+                showModal("Member Details — " + escapeHTML(memberInfo.name), bodyHTML, '<button class="btn btn-primary" onclick="closeModal()">Close</button>');
             };
 
             // ====== ADD MEMBER ======
@@ -646,28 +806,37 @@
                 deptSelect.appendChild(opt);
             });
 
-            document.getElementById("add-member-form").addEventListener("submit", function (e) {
+            document.getElementById("add-member-form").addEventListener("submit", async function (e) {
                 e.preventDefault();
 
                 var userType = document.getElementById("am-type").value;
-                var newUser = {
-                    user_id: generateUserId(userType),
+                var memberData = {
                     name: document.getElementById("am-name").value.trim(),
                     email: document.getElementById("am-email").value.trim(),
                     phone: document.getElementById("am-phone").value.trim() || "—",
                     department: document.getElementById("am-dept").value,
-                    user_type: userType,
+                    userType: userType,
+                    type_id: userType === 'Student' ? 1 : (userType === 'Teacher' ? 2 : 3),
                     password: document.getElementById("am-password").value
                 };
 
-                users.push(newUser);
-                if (typeof saveUsers === "function") saveUsers();
-                this.reset();
-                showToast("Member added successfully! ID: " + newUser.user_id, "success");
+                const res = await LibraryAPI.addMember(memberData);
+                if (res && res.success) {
+                    await syncDatabaseWithBackend();
+                    this.reset();
+                    renderLibMembers();
+                    showToast("Member registered in database successfully! ID: " + (res.member_id || ''), "success");
+                } else {
+                    var newUser = Object.assign({ user_id: generateUserId(userType) }, memberData, { user_type: userType });
+                    users.push(newUser);
+                    if (typeof saveUsers === "function") saveUsers();
+                    this.reset();
+                    showToast("Member added locally! ID: " + newUser.user_id, "success");
+                }
             });
 
             // ====== ISSUE BOOK (Librarian) ======
-            document.getElementById("ib-preview-btn").addEventListener("click", function () {
+            document.getElementById("ib-preview-btn").addEventListener("click", async function () {
                 var userId = document.getElementById("ib-userid").value.trim();
                 var bookId = document.getElementById("ib-bookid").value.trim().toUpperCase();
                 var preview = document.getElementById("ib-preview");
@@ -681,18 +850,29 @@
                 var book = getBookById(bookId);
                 var html = "";
 
-                if (!u) {
-                    html = '<p style="color:#c62828">User not found: ' + userId + '</p>';
+                var liveData = null;
+                if (typeof LibraryAPI !== "undefined" && typeof LibraryAPI.getAccountData === "function") {
+                    try {
+                        liveData = await LibraryAPI.getAccountData(userId);
+                    } catch (e) {}
+                }
+
+                if (!u && (!liveData || !liveData.member)) {
+                    html = '<p style="color:#c62828">User not found: ' + escapeHTML(userId) + '</p>';
                 } else if (!book) {
-                    html = '<p style="color:#c62828">Book not found: ' + bookId + '</p>';
+                    html = '<p style="color:#c62828">Book not found: ' + escapeHTML(bookId) + '</p>';
                 } else {
-                    var rules = getRulesForUserType(u.user_type);
-                    var active = getActiveTransactionsForUser(userId);
+                    var memberName = (liveData && liveData.member) ? liveData.member.name : (u ? u.name : userId);
+                    var memberType = (liveData && liveData.member) ? liveData.member.type_name : (u ? u.user_type : 'Member');
+                    var rules = (liveData && liveData.member) ? { maximum_books: liveData.member.max_books } : (u ? getRulesForUserType(u.user_type) : null);
+                    var activeCount = (liveData && liveData.activeLoans) ? liveData.activeLoans.length : getActiveTransactionsForUser(userId).length;
+                    var maxCount = rules ? rules.maximum_books : 3;
+
                     html = '<div style="background:#f5f7fa; padding:14px; border-radius:4px">' +
-                        '<p><strong>User:</strong> ' + u.name + ' (' + u.user_type + ')</p>' +
-                        '<p><strong>Book:</strong> ' + book.title + '</p>' +
+                        '<p><strong>User:</strong> ' + escapeHTML(memberName) + ' (' + escapeHTML(memberType) + ')</p>' +
+                        '<p><strong>Book:</strong> ' + escapeHTML(book.title) + '</p>' +
                         '<p><strong>Available Copies:</strong> ' + book.available_copies + '</p>' +
-                        '<p><strong>Current Borrowings:</strong> ' + active.length + (rules ? ' / ' + rules.maximum_books : '') + '</p>' +
+                        '<p><strong>Current Borrowings:</strong> ' + activeCount + ' / ' + maxCount + '</p>' +
                         '</div>';
                 }
 
@@ -700,7 +880,7 @@
                 preview.style.display = "block";
             });
 
-            document.getElementById("issue-book-form").addEventListener("submit", function (e) {
+            document.getElementById("issue-book-form").addEventListener("submit", async function (e) {
                 e.preventDefault();
 
                 var userId = document.getElementById("ib-userid").value.trim();
@@ -711,61 +891,46 @@
                     return;
                 }
 
-                var u = getUserById(userId);
-                if (!u) { showToast("User not found.", "error"); return; }
-                if (u.user_type === "Librarian") { showToast("Cannot issue books to librarian accounts.", "error"); return; }
-
-                var book = getBookById(bookId);
-                if (!book) { showToast("Book not found.", "error"); return; }
-                if (book.available_copies <= 0) { showToast("No copies available for this book.", "error"); return; }
-
-                var rules = getRulesForUserType(u.user_type);
-                var active = getActiveTransactionsForUser(userId);
-
-                if (rules && active.length >= rules.maximum_books) {
-                    showToast("User has reached the borrowing limit (" + rules.maximum_books + " books).", "warning");
-                    return;
+                const res = await LibraryAPI.borrowBook(userId, bookId);
+                if (res && res.success) {
+                    await syncDatabaseWithBackend();
+                    const dueFormatted = res.dueDate ? formatDate(res.dueDate) : 'in 14 days';
+                    showToast("Book issued successfully! Due: " + dueFormatted, "success");
+                    this.reset();
+                    document.getElementById("ib-preview").style.display = "none";
+                    renderLibBooks();
+                } else if (res && res.message) {
+                    showToast(res.message, "error");
+                } else {
+                    // Local fallback
+                    var u = getUserById(userId);
+                    var book = getBookById(bookId);
+                    if (!u || !book) { showToast("User or book not found.", "error"); return; }
+                    var rules = getRulesForUserType(u.user_type);
+                    var issueDate = getTodayStr();
+                    var dueDate = addDays(issueDate, rules ? rules.borrowing_days : 14);
+                    var txn = {
+                        transaction_id: generateTransactionId(),
+                        user_id: userId,
+                        book_id: bookId,
+                        issue_date: issueDate,
+                        due_date: dueDate,
+                        return_date: null,
+                        fine: 0,
+                        status: "Issued"
+                    };
+                    transactions.push(txn);
+                    book.available_copies--;
+                    if (typeof saveTransactions === "function") saveTransactions();
+                    if (typeof saveBooks === "function") saveBooks();
+                    showToast("Book issued! Txn: " + txn.transaction_id, "success");
+                    this.reset();
+                    document.getElementById("ib-preview").style.display = "none";
                 }
-
-                var overdue = active.filter(function (t) { return t.status === "Overdue"; });
-                if (overdue.length > 0) {
-                    showToast("User has overdue books. Cannot issue until returned.", "warning");
-                    return;
-                }
-
-                var already = active.find(function (t) { return t.book_id === bookId; });
-                if (already) {
-                    showToast("User already has this book.", "info");
-                    return;
-                }
-
-                var issueDate = getTodayStr();
-                var dueDate = addDays(issueDate, rules ? rules.borrowing_days : 14);
-
-                var txn = {
-                    transaction_id: generateTransactionId(),
-                    user_id: userId,
-                    book_id: bookId,
-                    issue_date: issueDate,
-                    due_date: dueDate,
-                    return_date: null,
-                    fine: 0,
-                    status: "Issued"
-                };
-
-                transactions.push(txn);
-                book.available_copies--;
-
-                if (typeof saveTransactions === "function") saveTransactions();
-                if (typeof saveBooks === "function") saveBooks();
-
-                showToast("Book issued! Txn: " + txn.transaction_id + ", Due: " + formatDate(dueDate), "success");
-                this.reset();
-                document.getElementById("ib-preview").style.display = "none";
             });
 
             // ====== RETURN BOOK (Librarian) ======
-            document.getElementById("rb-lookup-btn").addEventListener("click", function () {
+            document.getElementById("rb-lookup-btn").addEventListener("click", async function () {
                 var userId = document.getElementById("rb-userid").value.trim();
                 if (!userId) {
                     showToast("Please enter a User ID.", "warning");
@@ -773,18 +938,39 @@
                 }
 
                 var u = getUserById(userId);
-                if (!u) {
-                    showToast("User not found.", "error");
-                    return;
+                var memberName = u ? u.name : userId;
+                var active = [];
+
+                if (typeof LibraryAPI !== "undefined" && typeof LibraryAPI.getAccountData === "function") {
+                    try {
+                        var liveData = await LibraryAPI.getAccountData(userId);
+                        if (liveData && liveData.member) {
+                            memberName = liveData.member.name;
+                            active = (liveData.activeLoans || []).map(function (loan) {
+                                return {
+                                    transaction_id: 'TXN' + String(loan.borrow_id).padStart(3, '0'),
+                                    borrow_id: loan.borrow_id,
+                                    book_id: loan.book_id,
+                                    title: loan.title,
+                                    issue_date: loan.issue_date,
+                                    due_date: loan.due_date,
+                                    status: loan.status || 'Issued'
+                                };
+                            });
+                        }
+                    } catch (e) {}
                 }
 
-                var active = getActiveTransactionsForUser(userId);
+                if (active.length === 0) {
+                    active = getActiveTransactionsForUser(userId);
+                }
+
                 var results = document.getElementById("rb-results");
                 var tbody = document.getElementById("rb-results-body");
 
                 if (active.length === 0) {
                     results.style.display = "none";
-                    showToast("No issued books found for " + u.name + ".", "info");
+                    showToast("No issued books found for " + memberName + ".", "info");
                     return;
                 }
 
@@ -793,78 +979,79 @@
 
                 active.forEach(function (txn) {
                     var book = getBookById(txn.book_id);
+                    var bookTitle = txn.title || (book ? book.title : txn.book_id);
                     var statusClass = txn.status === "Overdue" ? "status-overdue" : "status-issued";
 
                     var tr = document.createElement("tr");
                     tr.innerHTML =
                         '<td>' + txn.transaction_id + '</td>' +
-                        '<td>' + (book ? book.title : txn.book_id) + '</td>' +
+                        '<td><strong>' + escapeHTML(bookTitle) + '</strong></td>' +
                         '<td>' + formatDate(txn.issue_date) + '</td>' +
                         '<td>' + formatDate(txn.due_date) + '</td>' +
                         '<td><span class="status-badge ' + statusClass + '">' + txn.status + '</span></td>' +
-                        '<td><button class="btn btn-sm btn-primary" onclick="libReturnBook(\'' + txn.transaction_id + '\', \'' + userId + '\')">Process Return</button></td>';
+                        '<td><button class="btn btn-sm btn-primary" onclick="libReturnBook(\'' + txn.transaction_id + '\', \'' + userId + '\', ' + txn.book_id + ')">Process Return</button></td>';
                     tbody.appendChild(tr);
                 });
             });
 
             // Librarian return
-            window.libReturnBook = function (txnId, userId) {
+            window.libReturnBook = function (txnId, userId, bookId) {
                 var txn = transactions.find(function (t) { return t.transaction_id === txnId; });
-                if (!txn) return;
-
-                var book = getBookById(txn.book_id);
+                var targetBookId = bookId || (txn ? txn.book_id : '');
+                var book = getBookById(targetBookId);
                 var u = getUserById(userId);
-                var returnDate = getTodayStr();
-                var fine = u ? calculateFine(u.user_type, txn.due_date, returnDate) : 0;
 
-                var msg = "Process return of <strong>" + (book ? book.title : txn.book_id) + "</strong> for <strong>" + (u ? u.name : userId) + "</strong>?";
-                if (fine > 0) {
-                    msg += "<br><br><strong>⚠ Late return. Fine: ₹" + fine + "</strong>";
-                }
+                var msg = "Process return of <strong>" + (book ? book.title : targetBookId) + "</strong> for <strong>" + (u ? u.name : userId) + "</strong> in database?";
 
-                showConfirm(msg, function () {
-                    txn.return_date = returnDate;
-                    txn.fine = fine;
-                    txn.status = "Returned";
-                    if (book) book.available_copies++;
-
-                    if (typeof saveTransactions === "function") saveTransactions();
-                    if (typeof saveBooks === "function") saveBooks();
-
-                    if (fine > 0) {
-                        showToast("Return processed. Fine: ₹" + fine, "warning");
+                showConfirm(msg, async function () {
+                    const res = await LibraryAPI.returnBook(userId, targetBookId);
+                    if (res && res.success) {
+                        await syncDatabaseWithBackend();
+                        var returnMsg = res.message;
+                        if (res.fine > 0) returnMsg += " (Fine: ₹" + res.fine + ")";
+                        showToast(returnMsg, "success");
+                    } else if (txn) {
+                        var returnDate = getTodayStr();
+                        var fine = u ? calculateFine(u.user_type, txn.due_date, returnDate) : 0;
+                        txn.return_date = returnDate;
+                        txn.fine = fine;
+                        txn.status = "Returned";
+                        if (book) book.available_copies++;
+                        if (typeof saveTransactions === "function") saveTransactions();
+                        if (typeof saveBooks === "function") saveBooks();
+                        showToast("Return processed locally.", "success");
                     } else {
-                        showToast("Return processed successfully.", "success");
+                        showToast(res && res.message ? res.message : "Return failed.", "error");
                     }
 
-                    // Refresh the lookup
+                    // Refresh lookup
                     document.getElementById("rb-lookup-btn").click();
+                    renderLibBooks();
                 });
             };
 
             // ====== VIEW ISSUED ======
-            function renderIssuedBooks() {
-                var issued = getAllIssuedBooks();
+            async function renderIssuedBooks() {
                 var tbody = document.getElementById("lib-issued-body");
                 var noMsg = document.getElementById("no-issued-msg");
+                tbody.innerHTML = '<tr><td colspan="7">Loading issued books from database…</td></tr>';
+
+                const list = await LibraryAPI.getIssuedBooks();
                 tbody.innerHTML = "";
 
-                if (issued.length === 0) {
+                if (!list || list.length === 0) {
                     noMsg.style.display = "block";
                     return;
                 }
                 noMsg.style.display = "none";
 
-                issued.forEach(function (txn) {
-                    var user = getUserById(txn.user_id);
-                    var book = getBookById(txn.book_id);
+                list.forEach(function (txn) {
                     var statusClass = txn.status === "Overdue" ? "status-overdue" : "status-issued";
-
                     var tr = document.createElement("tr");
                     tr.innerHTML =
-                        '<td>' + txn.transaction_id + '</td>' +
-                        '<td>' + (user ? user.name + ' (' + user.user_type + ')' : txn.user_id) + '</td>' +
-                        '<td>' + (book ? book.title : txn.book_id) + '</td>' +
+                        '<td>' + (txn.borrow_id ? 'TXN' + String(txn.borrow_id).padStart(3, '0') : txn.transaction_id) + '</td>' +
+                        '<td>' + (txn.member_name ? txn.member_name + ' (' + txn.member_type + ')' : txn.user_id) + '</td>' +
+                        '<td>' + (txn.book_title || txn.book_id) + '</td>' +
                         '<td>' + formatDate(txn.issue_date) + '</td>' +
                         '<td>' + formatDate(txn.due_date) + '</td>' +
                         '<td><span class="status-badge ' + statusClass + '">' + txn.status + '</span></td>';
@@ -873,81 +1060,84 @@
             }
 
             // ====== VIEW OVERDUE ======
-            function renderOverdueBooks() {
-                var overdue = getOverdueBooks();
+            async function renderOverdueBooks() {
                 var tbody = document.getElementById("lib-overdue-body");
                 var noMsg = document.getElementById("no-overdue-msg");
+                tbody.innerHTML = '<tr><td colspan="6">Loading overdue books from database…</td></tr>';
+
+                const list = await LibraryAPI.getOverdueBooks();
                 tbody.innerHTML = "";
 
-                if (overdue.length === 0) {
+                if (!list || list.length === 0) {
                     noMsg.style.display = "block";
                     return;
                 }
                 noMsg.style.display = "none";
 
-                overdue.forEach(function (txn) {
-                    var user = getUserById(txn.user_id);
-                    var book = getBookById(txn.book_id);
-
-                    var dueDate = new Date(txn.due_date);
-                    var today = new Date();
-                    var daysOverdue = Math.ceil((today - dueDate) / (1000 * 60 * 60 * 24));
-
-                    var fine = user ? calculateFine(user.user_type, txn.due_date, getTodayStr()) : 0;
+                list.forEach(function (txn) {
+                    var days = txn.days_overdue != null ? txn.days_overdue : 1;
+                    var fine = txn.fine_accrued != null ? Number(txn.fine_accrued).toFixed(2) : 2.00;
 
                     var tr = document.createElement("tr");
                     tr.innerHTML =
-                        '<td>' + txn.transaction_id + '</td>' +
-                        '<td>' + (user ? user.name : txn.user_id) + '</td>' +
-                        '<td>' + (book ? book.title : txn.book_id) + '</td>' +
+                        '<td>' + (txn.borrow_id ? 'TXN' + String(txn.borrow_id).padStart(3, '0') : txn.transaction_id) + '</td>' +
+                        '<td>' + (txn.member_name || txn.user_id) + '</td>' +
+                        '<td>' + (txn.book_title || txn.book_id) + '</td>' +
                         '<td>' + formatDate(txn.due_date) + '</td>' +
-                        '<td style="color:#c62828; font-weight:600">' + daysOverdue + ' days</td>' +
+                        '<td style="color:#c62828; font-weight:600">' + days + ' days</td>' +
                         '<td style="color:#c62828; font-weight:600">₹' + fine + '</td>';
                     tbody.appendChild(tr);
                 });
             }
 
             // ====== REPORTS ======
-            function renderReports() {
-                var totalCopies = books.reduce(function (s, b) { return s + b.total_copies; }, 0);
-                var availableCopies = books.reduce(function (s, b) { return s + b.available_copies; }, 0);
-                var issuedCount = getAllIssuedBooks().length;
-                var overdueCount = getOverdueBooks().length;
-                var memberCount = users.filter(function (u) { return u.user_type !== "Librarian"; }).length;
+            async function renderReports() {
+                const rep = await LibraryAPI.getReports();
+                if (rep && rep.summary) {
+                    const s = rep.summary;
+                    document.getElementById("report-summary").innerHTML =
+                        '<div class="summary-box"><div class="number">' + s.unique_titles + '</div><div class="label">Unique Titles</div></div>' +
+                        '<div class="summary-box"><div class="number">' + s.total_copies + '</div><div class="label">Total Copies</div></div>' +
+                        '<div class="summary-box"><div class="number">' + s.available_copies + '</div><div class="label">Available Copies</div></div>' +
+                        '<div class="summary-box"><div class="number">' + s.currently_issued + '</div><div class="label">Currently Issued</div></div>' +
+                        '<div class="summary-box"><div class="number">' + s.overdue_count + '</div><div class="label">Overdue</div></div>' +
+                        '<div class="summary-box"><div class="number">' + s.total_members + '</div><div class="label">Total Members</div></div>' +
+                        '<div class="summary-box"><div class="number">' + s.total_transactions + '</div><div class="label">Total Transactions</div></div>' +
+                        '<div class="summary-box"><div class="number">₹' + Number(s.total_fines || 0).toFixed(2) + '</div><div class="label">Total Fines Collected</div></div>';
 
-                document.getElementById("report-summary").innerHTML =
-                    '<div class="summary-box"><div class="number">' + books.length + '</div><div class="label">Unique Titles</div></div>' +
-                    '<div class="summary-box"><div class="number">' + totalCopies + '</div><div class="label">Total Copies</div></div>' +
-                    '<div class="summary-box"><div class="number">' + availableCopies + '</div><div class="label">Available Copies</div></div>' +
-                    '<div class="summary-box"><div class="number">' + issuedCount + '</div><div class="label">Currently Issued</div></div>' +
-                    '<div class="summary-box"><div class="number">' + overdueCount + '</div><div class="label">Overdue</div></div>' +
-                    '<div class="summary-box"><div class="number">' + memberCount + '</div><div class="label">Total Members</div></div>' +
-                    '<div class="summary-box"><div class="number">' + transactions.length + '</div><div class="label">Total Transactions</div></div>' +
-                    '<div class="summary-box"><div class="number">₹' + transactions.reduce(function(s,t){return s+t.fine;},0) + '</div><div class="label">Total Fines Collected</div></div>';
+                    var catBody = document.getElementById("report-category-body");
+                    catBody.innerHTML = "";
+                    rep.categories.forEach(function (cat) {
+                        var tr = document.createElement("tr");
+                        tr.innerHTML = '<td>' + cat.category_name + '</td><td>' + cat.book_count + '</td><td>' + cat.total_copies + '</td><td>' + cat.available_copies + '</td>';
+                        catBody.appendChild(tr);
+                    });
 
-                // By category
-                var catBody = document.getElementById("report-category-body");
-                catBody.innerHTML = "";
-                var cats = getBookCategories();
-                cats.forEach(function (cat) {
-                    var catBooks = books.filter(function (b) { return b.category === cat; });
-                    var totalC = catBooks.reduce(function (s, b) { return s + b.total_copies; }, 0);
-                    var availC = catBooks.reduce(function (s, b) { return s + b.available_copies; }, 0);
+                    var memBody = document.getElementById("report-member-body");
+                    memBody.innerHTML = "";
+                    rep.memberTypes.forEach(function (type) {
+                        var tr = document.createElement("tr");
+                        tr.innerHTML = '<td>' + type.type_name + '</td><td>' + type.member_count + '</td>';
+                        memBody.appendChild(tr);
+                    });
+                } else {
+                    // Fallback
+                    var totalCopies = books.reduce(function (s, b) { return s + b.total_copies; }, 0);
+                    var availableCopies = books.reduce(function (s, b) { return s + b.available_copies; }, 0);
+                    var issuedCount = getAllIssuedBooks().length;
+                    var overdueCount = getOverdueBooks().length;
+                    var memberCount = users.filter(function (u) { return u.user_type !== "Librarian"; }).length;
 
-                    var tr = document.createElement("tr");
-                    tr.innerHTML = '<td>' + cat + '</td><td>' + catBooks.length + '</td><td>' + totalC + '</td><td>' + availC + '</td>';
-                    catBody.appendChild(tr);
-                });
-
-                // By member type
-                var memBody = document.getElementById("report-member-body");
-                memBody.innerHTML = "";
-                ["Student", "Teacher", "Non-Teaching Staff"].forEach(function (type) {
-                    var count = users.filter(function (u) { return u.user_type === type; }).length;
-                    var tr = document.createElement("tr");
-                    tr.innerHTML = '<td>' + type + '</td><td>' + count + '</td>';
-                    memBody.appendChild(tr);
-                });
+                    document.getElementById("report-summary").innerHTML =
+                        '<div class="summary-box"><div class="number">' + books.length + '</div><div class="label">Unique Titles</div></div>' +
+                        '<div class="summary-box"><div class="number">' + totalCopies + '</div><div class="label">Total Copies</div></div>' +
+                        '<div class="summary-box"><div class="number">' + availableCopies + '</div><div class="label">Available Copies</div></div>' +
+                        '<div class="summary-box"><div class="number">' + issuedCount + '</div><div class="label">Currently Issued</div></div>' +
+                        '<div class="summary-box"><div class="number">' + overdueCount + '</div><div class="label">Overdue</div></div>' +
+                        '<div class="summary-box"><div class="number">' + memberCount + '</div><div class="label">Total Members</div></div>' +
+                        '<div class="summary-box"><div class="number">' + transactions.length + '</div><div class="label">Total Transactions</div></div>' +
+                        '<div class="summary-box"><div class="number">₹' + transactions.reduce(function(s,t){return s+t.fine;},0) + '</div><div class="label">Total Fines Collected</div></div>';
+                }
             }
 
             // Initial load

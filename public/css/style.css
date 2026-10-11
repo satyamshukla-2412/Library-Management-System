@@ -251,6 +251,162 @@ p {
     background: #234a85;
 }
 
+/* Search Autocomplete & Suggestions */
+.search-container {
+    position: relative;
+    max-width: 600px;
+    margin: 0 auto 20px;
+    width: 100%;
+}
+
+.search-container .search-bar {
+    margin-bottom: 0;
+}
+
+.search-clear-btn {
+    background: transparent !important;
+    color: #94a3b8 !important;
+    border: none;
+    padding: 0 10px !important;
+    font-size: 1.2rem !important;
+    cursor: pointer;
+    display: none;
+    align-items: center;
+    justify-content: center;
+}
+
+.search-clear-btn:hover {
+    color: #475569 !important;
+}
+
+.search-suggestions {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.15);
+    max-height: 400px;
+    overflow-y: auto;
+    z-index: 1000;
+    text-align: left;
+    animation: fadeInSuggestions 0.15s ease-out;
+}
+
+@keyframes fadeInSuggestions {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.suggestion-item {
+    padding: 10px 14px;
+    cursor: pointer;
+    border-bottom: 1px solid #f1f5f9;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    transition: background 0.12s ease;
+}
+
+.suggestion-item:last-child {
+    border-bottom: none;
+}
+
+.suggestion-item:hover,
+.suggestion-item.active {
+    background: #f1f5f9;
+}
+
+.suggestion-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+}
+
+.suggestion-title {
+    font-weight: 600;
+    color: #1e293b;
+    font-size: 0.93rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.suggestion-badge {
+    font-size: 0.72rem;
+    padding: 2px 7px;
+    border-radius: 999px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.suggestion-badge.available {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.suggestion-badge.issued {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.suggestion-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.8rem;
+    color: #64748b;
+}
+
+.suggestion-tag {
+    background: #e2e8f0;
+    color: #334155;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 0.73rem;
+}
+
+.suggestion-match {
+    color: #2563eb;
+    font-weight: 500;
+    font-size: 0.75rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    background: #eff6ff;
+    padding: 1px 5px;
+    border-radius: 3px;
+}
+
+.search-highlight {
+    background: #fef08a;
+    color: #713f12;
+    padding: 0 1px;
+    border-radius: 2px;
+    font-weight: 700;
+}
+
+.suggestion-footer {
+    padding: 8px 12px;
+    font-size: 0.78rem;
+    color: #64748b;
+    background: #f8fafc;
+    text-align: center;
+    border-radius: 0 0 8px 8px;
+    border-top: 1px solid #e2e8f0;
+}
+
+.suggestion-empty {
+    padding: 16px;
+    text-align: center;
+    color: #64748b;
+    font-size: 0.88rem;
+}
+
 .quick-links {
     display: flex;
     justify-content: center;
@@ -477,6 +633,49 @@ tbody tr:last-child td {
 .form-group textarea:focus {
     outline: none;
     border-color: #2c5aa0;
+}
+
+/* Password Input with Visibility Eye Toggle */
+.password-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: 100%;
+}
+
+.password-input-wrapper input {
+    width: 100%;
+    padding-right: 42px !important;
+}
+
+.password-toggle-btn {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: transparent;
+    border: none;
+    outline: none;
+    cursor: pointer;
+    padding: 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #64748b;
+    border-radius: 4px;
+    transition: color 0.15s ease, background 0.15s ease;
+}
+
+.password-toggle-btn:hover {
+    color: #1e293b;
+    background: #f1f5f9;
+}
+
+.password-toggle-btn svg {
+    width: 20px;
+    height: 20px;
+    display: block;
+    pointer-events: none;
 }
 
 .form-row {

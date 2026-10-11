@@ -66,7 +66,8 @@ INSERT INTO category (category_id, category_name) VALUES
 (5, 'Mechanical Engineering'),
 (6, 'Literature'),
 (7, 'Physics'),
-(8, 'Chemistry');
+(8, 'Chemistry'),
+(9, 'General Engineering');
 
 -- -----------------------------------------------------
 -- 4. BOOK : Catalog with copy stock tracking
@@ -123,7 +124,19 @@ INSERT INTO book (book_id, title, author, publisher, isbn, edition, shelf_number
 (11, 'Engineering Physics',             'H.K. Malik',            'McGraw-Hill', '978-0070671539', '2nd Edition',  'PH-A1', FALSE, 3, 3, 7),
 (12, 'Engineering Chemistry',           'Jain & Jain',           'Dhanpat Rai', '978-8177582093', '16th Edition', 'CH-A1', FALSE, 4, 4, 8),
 (13, 'Encyclopedia of Computing',       'Various Authors',       'Oxford',      '978-0198609612', '1st Edition',  'REF-01', TRUE,  1, 1, 1),
-(14, 'Oxford Advanced Learner Dictionary','A.S. Hornby',         'Oxford',      '978-0194799003', '9th Edition',  'REF-02', TRUE,  2, 2, 6);
+(14, 'Oxford Advanced Learner Dictionary','A.S. Hornby',         'Oxford',      '978-0194799003', '9th Edition',  'REF-02', TRUE,  2, 2, 6),
+(15, 'Data Structures Using C',         'Reema Thareja',         'Oxford University Press', '978-0198099307', '2nd Edition', 'CS-A3', FALSE, 5, 5, 1),
+(16, 'Linear Algebra and Its Applications', 'Gilbert Strang',    'Cengage Learning', '978-8131501726', '4th Edition', 'MA-A2', FALSE, 3, 3, 2),
+(17, 'Let Us C',                        'Yashavant Kanetkar',    'BPB Publications', '978-8183331630', '17th Edition', 'CS-A4', FALSE, 6, 6, 1),
+(18, 'Modern Operating Systems',        'Andrew S. Tanenbaum',   'Pearson Education', '978-9332550575', '4th Edition', 'CS-C1', FALSE, 3, 3, 1),
+(19, 'Software Engineering',            'Ian Sommerville',       'Pearson Education', '978-9332518858', '10th Edition', 'CS-C2', FALSE, 4, 4, 1),
+(20, 'Discrete Mathematics and Its Applications', 'Kenneth H. Rosen', 'McGraw-Hill Education', '978-0070681880', '7th Edition', 'MA-B2', FALSE, 4, 4, 2),
+(21, 'Artificial Intelligence: A Modern Approach', 'Stuart Russell, Peter Norvig', 'Pearson Education', '978-9332543515', '3rd Edition', 'CS-D2', FALSE, 3, 3, 1),
+(22, 'Microprocessor Architecture, Programming, and Applications', 'Ramesh S. Gaonkar', 'Penram International', '978-8131705988', '5th Edition', 'EC-B1', FALSE, 4, 4, 3),
+(23, 'Fluid Mechanics',                 'R.K. Bansal',           'Laxmi Publications', '978-8131808153', '9th Edition', 'ME-A2', FALSE, 3, 3, 5),
+(24, 'Strength of Materials',           'R.K. Rajput',           'S. Chand Publishing', '978-8121935029', '6th Edition', 'CE-A2', FALSE, 4, 4, 4),
+(25, 'Engineering Drawing',             'N.D. Bhatt',            'Charotar Publishing', '978-9380358178', '53rd Edition', 'GE-A1', FALSE, 6, 6, 9),
+(26, 'Probability and Statistics for Engineers', 'Ronald E. Walpole', 'Pearson Education', '978-9332519091', '9th Edition', 'MA-C1', FALSE, 3, 3, 2);
 
 INSERT INTO member (member_id, name, email, phone, department, type_id, password, role) VALUES
 (1, 'Rahul Sharma',    'rahul.sharma@college.edu.in', '9876543210', 'Computer Science',       1, 'rahul123',  'MEMBER'),

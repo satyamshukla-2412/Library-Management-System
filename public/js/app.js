@@ -188,7 +188,7 @@ function borrowBook(bookId) {
         '<p><strong>Issue Date:</strong> ' + formatDate(issueDate) + '</p>' +
         '<p><strong>Due Date:</strong> ' + formatDate(dueDate) + '</p>' +
         '<p><strong>Your Type:</strong> ' + user.user_type + '</p>' +
-        '<p><strong>Remaining Limit:</strong> ' + (rules.maximum_books - activeBooks.length - 1) + ' books after this issue</p>' +
+        '<p><strong>Remaining Limit:</strong> ' + Math.max(0, rules.maximum_books - activeBooks.length - 1) + ' books after this issue</p>' +
         '</div>';
 
     const footerHTML = '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
@@ -196,26 +196,64 @@ function borrowBook(bookId) {
 
     showModal("Borrow Book", bodyHTML, footerHTML);
 
-    document.getElementById("confirm-borrow-btn").addEventListener("click", function () {
-        // Create transaction
+    document.getElementById("confirm-borrow-btn").addEventListener("click", async function () {
+        const btn = document.getElementById("confirm-borrow-btn");
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = "Processing...";
+        }
+
+        let serverDueDate = dueDate;
+        let serverBorrowId = generateTransactionId();
+
+        // 1. Call Backend MySQL Stored Procedure
+        try {
+            if (typeof LibraryAPI !== "undefined") {
+                const res = await LibraryAPI.borrowBook(user.member_id || user.user_id, book.book_id || bookId);
+                if (res) {
+                    if (res.success) {
+                        if (res.dueDate) serverDueDate = String(res.dueDate).split('T')[0];
+                        if (res.borrowId) serverBorrowId = "TXN" + String(res.borrowId).padStart(3, "0");
+                    } else {
+                        showToast(res.message || "Could not borrow book.", "error");
+                        if (btn) {
+                            btn.disabled = false;
+                            btn.textContent = "Confirm Borrow";
+                        }
+                        return;
+                    }
+                }
+            }
+        } catch (err) {
+            console.warn("[Borrow] Backend API error:", err);
+        }
+
+        // 2. Create transaction locally for instant reactivity
         const txn = {
-            transaction_id: generateTransactionId(),
+            transaction_id: serverBorrowId,
             user_id: user.user_id,
-            book_id: bookId,
+            book_id: book.book_id || bookId,
             issue_date: issueDate,
-            due_date: dueDate,
+            due_date: serverDueDate,
             return_date: null,
             fine: 0,
             status: "Issued"
         };
         transactions.push(txn);
 
-        // Update book availability
-        book.available_copies--;
+        // Update book availability locally
+        book.available_copies = Math.max(0, book.available_copies - 1);
 
         // Save to persistent storage
         if (typeof saveTransactions === "function") saveTransactions();
         if (typeof saveBooks === "function") saveBooks();
+
+        // 3. Synchronize cache from MySQL
+        if (typeof syncDatabaseWithBackend === "function") {
+            try {
+                await syncDatabaseWithBackend();
+            } catch (e) {}
+        }
 
         closeModal();
 
@@ -224,22 +262,30 @@ function borrowBook(bookId) {
             renderBooks();
         }
 
-        // Show success
-        const successBody = '<div class="issue-success">' +
-            '<div class="success-icon">✓</div>' +
-            '<h4>Book Issue Successful</h4>' +
-            '<table class="detail-table">' +
-            '<tr><td>Book</td><td>' + book.title + '</td></tr>' +
-            '<tr><td>Transaction ID</td><td>' + txn.transaction_id + '</td></tr>' +
+        // Refresh account page if on account page
+        if (typeof loadAccountData === "function") {
+            loadAccountData();
+        }
+
+        // Show success with link to My Account
+        const successBody = '<div class="issue-success" style="text-align:center; padding:15px 0;">' +
+            '<div class="success-icon" style="font-size:3rem; color:#16a34a; margin-bottom:10px;">✓</div>' +
+            '<h4 style="margin-bottom:15px; color:#1e293b;">Book Issued Successfully</h4>' +
+            '<table class="detail-table" style="text-align:left; margin-bottom:20px;">' +
+            '<tr><td>Book</td><td><strong>' + book.title + '</strong></td></tr>' +
+            '<tr><td>Transaction ID</td><td>' + serverBorrowId + '</td></tr>' +
             '<tr><td>Issue Date</td><td>' + formatDate(issueDate) + '</td></tr>' +
-            '<tr><td>Due Date</td><td>' + formatDate(dueDate) + '</td></tr>' +
-            '<tr><td>User Type</td><td>' + user.user_type + '</td></tr>' +
-            '<tr><td>Remaining Limit</td><td>' + (rules.maximum_books - activeBooks.length - 1) + ' books</td></tr>' +
+            '<tr><td>Due Date</td><td>' + formatDate(serverDueDate) + '</td></tr>' +
+            '<tr><td>Member</td><td>' + user.name + ' (' + user.user_type + ')</td></tr>' +
             '</table>' +
+            '<div style="display:flex; gap:12px; justify-content:center;">' +
+            '<a href="account.html" class="btn btn-primary">Go to My Account</a>' +
+            '<button class="btn btn-secondary" onclick="closeModal()">Keep Browsing</button>' +
+            '</div>' +
             '</div>';
 
-        showModal("Book Issued", successBody, '<button class="btn btn-primary" onclick="closeModal()">OK</button>');
-        showToast("Book issued successfully!", "success");
+        showModal("Book Issued", successBody, '');
+        showToast("Book issued successfully! It is now in your account.", "success");
     });
 }
 
@@ -248,17 +294,13 @@ function returnBook(transactionId) {
     const user = getCurrentUser();
     if (!user) return;
 
-    const txn = transactions.find(t => t.transaction_id === transactionId);
-    if (!txn) {
-        showToast("Transaction not found.", "error");
-        return;
-    }
-
-    const book = getBookById(txn.book_id);
+    const txn = transactions.find(t => t.transaction_id === transactionId || String(t.borrow_id) === String(transactionId));
+    const bookId = txn ? txn.book_id : transactionId;
+    const book = getBookById(bookId);
     const returnDate = getTodayStr();
-    const fine = calculateFine(user.user_type, txn.due_date, returnDate);
+    const fine = txn ? calculateFine(user.user_type, txn.due_date, returnDate) : 0;
 
-    let bodyHTML = '<p>Are you sure you want to return <strong>' + (book ? book.title : txn.book_id) + '</strong>?</p>';
+    let bodyHTML = '<p>Are you sure you want to return <strong>' + (book ? book.title : bookId) + '</strong>?</p>';
 
     if (fine > 0) {
         bodyHTML += '<div class="fine-warning">' +
@@ -272,11 +314,30 @@ function returnBook(transactionId) {
 
     showModal("Return Book", bodyHTML, footerHTML);
 
-    document.getElementById("confirm-return-btn").addEventListener("click", function () {
-        // Update transaction
-        txn.return_date = returnDate;
-        txn.fine = fine;
-        txn.status = "Returned";
+    document.getElementById("confirm-return-btn").addEventListener("click", async function () {
+        const btn = document.getElementById("confirm-return-btn");
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = "Returning...";
+        }
+
+        try {
+            if (typeof LibraryAPI !== "undefined") {
+                const res = await LibraryAPI.returnBook(user.member_id || user.user_id, (book ? book.book_id : bookId));
+                if (res && res.success) {
+                    showToast(res.message || "Book returned successfully!", "success");
+                }
+            }
+        } catch (err) {
+            console.warn("[Return] API return error:", err);
+        }
+
+        // Update transaction locally
+        if (txn) {
+            txn.return_date = returnDate;
+            txn.fine = fine;
+            txn.status = "Returned";
+        }
 
         // Update book availability
         if (book) {
@@ -287,19 +348,22 @@ function returnBook(transactionId) {
         if (typeof saveTransactions === "function") saveTransactions();
         if (typeof saveBooks === "function") saveBooks();
 
-        closeModal();
-
-        let successMsg = "Return recorded successfully.";
-        if (fine > 0) {
-            successMsg = "Return recorded. Late return fine: ₹" + fine;
-            showToast(successMsg, "warning");
-        } else {
-            showToast(successMsg, "success");
+        // Sync with backend
+        if (typeof syncDatabaseWithBackend === "function") {
+            try {
+                await syncDatabaseWithBackend();
+            } catch (e) {}
         }
 
-        // Refresh the page content if on account page
+        closeModal();
+
+        // Refresh account page
         if (typeof loadAccountData === "function") {
-            loadAccountData();
+            await loadAccountData();
+        }
+        // Refresh catalog if open
+        if (typeof renderBooks === "function") {
+            renderBooks();
         }
     });
 }

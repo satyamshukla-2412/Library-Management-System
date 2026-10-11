@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/index.js" },
+    { "source": "/books", "destination": "/books.html" },
+    { "source": "/rules", "destination": "/rules.html" },
+    { "source": "/about", "destination": "/about.html" },
+    { "source": "/login", "destination": "/login.html" },
+    { "source": "/signup", "destination": "/signup.html" },
+    { "source": "/account", "destination": "/account.html" },
+    { "source": "/librarian", "destination": "/librarian.html" }
+  ]
+}
