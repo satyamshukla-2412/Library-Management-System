@@ -8,27 +8,34 @@ const API_BASE = window.location.origin.startsWith("http") ? "" : "http://localh
 
 const LibraryAPI = {
     isServerAvailable: null,
+    _lastCheck: 0,
 
-    // Check backend health
-    async checkBackend() {
-        if (this.isServerAvailable !== null) return this.isServerAvailable;
+    // Check backend health (re-checks every 30 seconds so a stale 'false' doesn't persist)
+    async checkBackend(forceRecheck) {
+        const now = Date.now();
+        if (!forceRecheck && this.isServerAvailable !== null && (now - this._lastCheck) < 30000) {
+            return this.isServerAvailable;
+        }
         try {
-            const res = await fetch(`${API_BASE}/api/status`, { method: "GET" });
+            const res = await fetch(`${API_BASE}/api/status`, { method: "GET", cache: "no-store" });
             const data = await res.json();
             this.isServerAvailable = data.connected === true;
+            this._lastCheck = now;
             if (this.isServerAvailable) {
                 console.log("[LibraryAPI] Connected to live MySQL Backend:", data.database);
             }
             return this.isServerAvailable;
         } catch (err) {
             this.isServerAvailable = false;
+            this._lastCheck = now;
             return false;
         }
     },
 
-    // Login
+    // Login — always force a fresh server check so a previously-cached 'offline'
+    // state doesn't block users when the server is actually running.
     async login(userId, password, userType) {
-        const hasServer = await this.checkBackend();
+        const hasServer = await this.checkBackend(true /* forceRecheck */);
         if (hasServer) {
             try {
                 const res = await fetch(`${API_BASE}/api/login`, {
@@ -45,7 +52,7 @@ const LibraryAPI = {
                 console.warn("[LibraryAPI] Server login failed, falling back to local:", err.message);
             }
         }
-        // Fallback to local auth
+        // Fallback to local auth (only works for hardcoded/mock users)
         return loginUser(userId, password, userType);
     },
 
@@ -57,7 +64,7 @@ const LibraryAPI = {
                 const res = await fetch(`${API_BASE}/api/signup`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(payload)
+                    body: JSON.stringify(payload)   // includes librarianCode when present
                 });
                 const data = await res.json();
                 if (data.success) {
@@ -78,14 +85,17 @@ const LibraryAPI = {
                 console.warn("[LibraryAPI] Server signup failed, falling back to local:", err.message);
             }
         }
-        // Local fallback
+        // Local fallback — Librarian registration not allowed offline (no way to verify the code)
+        if (payload.userType === 'Librarian') {
+            return { success: false, message: "Librarian registration requires a live server connection. Please ensure the backend is running." };
+        }
         if (typeof users !== 'undefined' && Array.isArray(users)) {
             const exists = users.find(u => u.email.toLowerCase() === payload.email.toLowerCase());
             if (exists) {
                 return { success: false, message: "An account with this email already exists." };
             }
             const count = users.filter(u => u.user_type === payload.userType).length + 1;
-            const prefix = payload.userType === "Student" ? "STU" : (payload.userType === "Teacher" ? "TCH" : (payload.userType === "Librarian" ? "LIB" : "NTS"));
+            const prefix = payload.userType === "Student" ? "STU" : (payload.userType === "Teacher" ? "TCH" : "NTS");
             const newId = `${prefix}${String(count).padStart(3, "0")}`;
             users.push({
                 user_id: newId,
@@ -336,7 +346,23 @@ const LibraryAPI = {
         return null;
     },
 
-    // Librarian: Delete Book
+    // Librarian: Increase Book Quantity / Add Copies
+    async increaseBookQuantity(bookId, copies) {
+        const hasServer = await this.checkBackend();
+        if (hasServer) {
+            try {
+                const res = await fetch(`${API_BASE}/api/librarian/books/${bookId}/increase-quantity`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ copies: parseInt(copies, 10) || 1 })
+                });
+                return await res.json();
+            } catch (err) {
+                console.warn("[LibraryAPI] Increase book quantity failed:", err.message);
+            }
+        }
+        return null;
+    },
     async deleteBook(bookId) {
         const hasServer = await this.checkBackend();
         if (hasServer) {

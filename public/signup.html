@@ -24,8 +24,23 @@
                     <div class="form-group"><label for="signup-name">Full Name</label><input id="signup-name" required autocomplete="name"></div>
                     <div class="form-group"><label for="signup-email">Email Address</label><input type="email" id="signup-email" required autocomplete="email"></div>
                     <div class="form-group"><label for="signup-phone">Phone Number</label><input type="tel" id="signup-phone" autocomplete="tel"></div>
-                    <div class="form-group"><label for="signup-department">Department</label><input id="signup-department" placeholder="e.g. Computer Science" required></div>
                     <div class="form-group"><label for="signup-type">Register As</label><select id="signup-type" required><option value="">— Select Member Type —</option><option value="Student">Student</option><option value="Teacher">Teacher</option><option value="Non-Teaching Staff">Non-Teaching Staff</option><option value="Librarian">Librarian</option></select></div>
+                    <div class="form-group">
+                        <label for="signup-department">Department</label>
+                        <input id="signup-department" placeholder="e.g. Computer Science" required>
+                        <small id="dept-hint" style="color:#6b7280; font-size:0.82rem; margin-top:4px; display:none;">Librarians are not assigned to a department.</small>
+                    </div>
+                    <!-- Librarian Access Code — only visible when Librarian is selected -->
+                    <div class="form-group" id="lib-code-group" style="display:none;">
+                        <label for="signup-lib-code">🔒 Librarian Access Code</label>
+                        <div class="password-input-wrapper">
+                            <input type="password" id="signup-lib-code" placeholder="Enter the secret librarian code" autocomplete="off">
+                            <button type="button" class="password-toggle-btn" id="toggle-lib-code" aria-label="Show code" title="Show/Hide code">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                            </button>
+                        </div>
+                        <small style="color:#6b7280; font-size:0.82rem; margin-top:4px; display:block;">This code is provided by the library administrator. Without it, Librarian accounts cannot be created.</small>
+                    </div>
                     <div class="form-group">
                         <label for="signup-password">Password</label>
                         <div class="password-input-wrapper">
@@ -75,6 +90,44 @@
         }
         setupPasswordToggle("toggle-signup-password", "signup-password");
         setupPasswordToggle("toggle-signup-confirm", "signup-confirm-password");
+        setupPasswordToggle("toggle-lib-code", "signup-lib-code");
+
+        // Auto-manage Department field based on Register As selection
+        var typeSelect = document.getElementById('signup-type');
+        var deptInput = document.getElementById('signup-department');
+        var deptHint = document.getElementById('dept-hint');
+
+        typeSelect.addEventListener('change', function () {
+            var libCodeGroup = document.getElementById('lib-code-group');
+            var libCodeInput = document.getElementById('signup-lib-code');
+            if (this.value === 'Librarian') {
+                // Department: auto-fill N/A, lock it
+                deptInput.value = 'N/A';
+                deptInput.readOnly = true;
+                deptInput.required = false;
+                deptInput.style.background = '#f1f5f9';
+                deptInput.style.color = '#94a3b8';
+                deptInput.style.cursor = 'not-allowed';
+                deptHint.style.display = 'block';
+                // Access code: show and require it
+                libCodeGroup.style.display = 'block';
+                libCodeInput.required = true;
+            } else {
+                // Department: editable and required
+                if (deptInput.value === 'N/A') deptInput.value = '';
+                deptInput.readOnly = false;
+                deptInput.required = true;
+                deptInput.style.background = '';
+                deptInput.style.color = '';
+                deptInput.style.cursor = '';
+                deptHint.style.display = 'none';
+                // Access code: hide and clear
+                libCodeGroup.style.display = 'none';
+                libCodeInput.required = false;
+                libCodeInput.value = '';
+            }
+        });
+
         document.getElementById('signup-form').addEventListener('submit', async function (event) {
             event.preventDefault();
             const message = document.getElementById('signup-message');
@@ -93,7 +146,8 @@
                 phone: document.getElementById('signup-phone').value.trim(),
                 department: document.getElementById('signup-department').value.trim(),
                 userType: document.getElementById('signup-type').value,
-                password: password
+                password: password,
+                librarianCode: document.getElementById('signup-lib-code').value
             };
             try {
                 const data = await LibraryAPI.signup(payload);

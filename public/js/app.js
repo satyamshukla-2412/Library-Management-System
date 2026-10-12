@@ -369,8 +369,35 @@ function returnBook(transactionId) {
 }
 
 // --- View Book Details ---
-function viewBookDetails(bookId) {
-    const book = getBookById(bookId);
+async function viewBookDetails(bookId) {
+    // Try local cache first
+    let book = getBookById(bookId);
+
+    // If not in local cache, try fetching from the backend API
+    if (!book && typeof LibraryAPI !== "undefined") {
+        try {
+            const results = await LibraryAPI.searchBooks(String(bookId));
+            if (results && results.length > 0) {
+                const b = results[0];
+                book = {
+                    book_id: b.formatted_id || b.book_code || ('LIB' + String(b.book_id).padStart(3, '0')),
+                    numeric_id: b.book_id,
+                    title: b.title,
+                    author: b.author,
+                    isbn: b.isbn,
+                    publisher: b.publisher,
+                    category: b.category,
+                    edition: b.edition,
+                    total_copies: Number(b.total_copies),
+                    available_copies: Number(b.available_copies),
+                    shelf_number: b.shelf_number
+                };
+            }
+        } catch (err) {
+            console.warn("[viewBookDetails] API fetch failed:", err);
+        }
+    }
+
     if (!book) {
         showToast("Book not found.", "error");
         return;
@@ -381,16 +408,16 @@ function viewBookDetails(bookId) {
     const statusText = book.available_copies > 0 ? "Available" : "All Copies Issued";
 
     let bodyHTML = '<table class="detail-table">' +
-        '<tr><td>Book ID</td><td>' + book.book_id + '</td></tr>' +
+        '<tr><td>Book ID</td><td>' + (book.book_id || bookId) + '</td></tr>' +
         '<tr><td>Title</td><td>' + book.title + '</td></tr>' +
         '<tr><td>Author</td><td>' + book.author + '</td></tr>' +
-        '<tr><td>ISBN</td><td>' + book.isbn + '</td></tr>' +
-        '<tr><td>Publisher</td><td>' + book.publisher + '</td></tr>' +
-        '<tr><td>Category</td><td>' + book.category + '</td></tr>' +
-        '<tr><td>Edition</td><td>' + book.edition + '</td></tr>' +
+        '<tr><td>ISBN</td><td>' + (book.isbn || '—') + '</td></tr>' +
+        '<tr><td>Publisher</td><td>' + (book.publisher || '—') + '</td></tr>' +
+        '<tr><td>Category</td><td>' + (book.category || '—') + '</td></tr>' +
+        '<tr><td>Edition</td><td>' + (book.edition || '—') + '</td></tr>' +
         '<tr><td>Total Copies</td><td>' + book.total_copies + '</td></tr>' +
         '<tr><td>Available Copies</td><td>' + book.available_copies + '</td></tr>' +
-        '<tr><td>Shelf Number</td><td>' + book.shelf_number + '</td></tr>' +
+        '<tr><td>Shelf Number</td><td>' + (book.shelf_number || '—') + '</td></tr>' +
         '<tr><td>Status</td><td><span class="status-badge ' + statusClass + '">' + statusText + '</span></td></tr>' +
         '</table>';
 

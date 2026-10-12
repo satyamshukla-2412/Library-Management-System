@@ -179,9 +179,9 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
-// 3. Public registration. Librarian accounts must be created by an administrator.
+// 3. Public registration. Librarian accounts require a secret access code.
 app.post('/api/signup', async (req, res) => {
-    const { name, email, phone, department, userType, password } = req.body;
+    const { name, email, phone, department, userType, password, librarianCode } = req.body;
     const allowedTypes = ['Student', 'Teacher', 'Non-Teaching Staff', 'Librarian'];
     const normalizedEmail = String(email || '').trim().toLowerCase();
 
@@ -197,6 +197,18 @@ app.post('/api/signup', async (req, res) => {
     if (String(password).length < 6) {
         return res.status(400).json({ success: false, message: 'Password must contain at least 6 characters.' });
     }
+
+    // ── Librarian guard: require secret access code ──────────────────────────
+    if (userType === 'Librarian') {
+        const expectedCode = process.env.LIBRARIAN_CODE || '';
+        if (!librarianCode || librarianCode.trim() !== expectedCode) {
+            return res.status(403).json({
+                success: false,
+                message: 'Invalid Librarian Access Code. Contact the library administrator.'
+            });
+        }
+    }
+    // ─────────────────────────────────────────────────────────────────────────
 
     try {
         const [types] = await pool.query('SELECT type_id FROM member_type WHERE type_name = ?', [userType]);
@@ -614,21 +626,121 @@ app.get('/api/librarian/transactions', async (req, res) => {
     }
 });
 
-// 12. Librarian: Add new book
+// Helper: Resolve or auto-create category by name or ID
+async function getOrCreateCategoryId(categoryInput) {
+    if (!categoryInput) return 1;
+    if (typeof categoryInput === 'number' && categoryInput > 0) {
+        return categoryInput;
+    }
+    const raw = String(categoryInput).trim();
+    if (!raw || raw === '__other__') return 1;
+    const numeric = parseInt(raw, 10);
+    if (!isNaN(numeric) && String(numeric) === raw) {
+        return numeric;
+    }
+
+    // Check existing category (case insensitive)
+    const [existing] = await pool.query(
+        'SELECT category_id, category_name FROM category WHERE LOWER(TRIM(category_name)) = LOWER(?)',
+        [raw]
+    );
+    if (existing.length > 0) {
+        return existing[0].category_id;
+    }
+
+    // Format new category nicely
+    let formatted = raw;
+    const cleanLower = raw.toLowerCase().replace(/[\s-_]/g, '');
+    if (cleanLower === 'nonfiction') {
+        formatted = 'Non-Fiction';
+    } else {
+        formatted = raw.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    }
+
+    const [insertResult] = await pool.query(
+        'INSERT INTO category (category_name) VALUES (?)',
+        [formatted]
+    );
+    return insertResult.insertId;
+}
+
+// 12. Librarian: Add new book (with duplicate prevention and category resolution)
 app.post('/api/librarian/books', async (req, res) => {
-    const { title, author, publisher, isbn, edition, shelf_number, is_reference, total_copies, category_id } = req.body;
+    const { title, author, publisher, isbn, edition, shelf_number, is_reference, total_copies, category_id, category } = req.body;
     try {
+        const cleanTitle = String(title || '').trim();
+        const cleanIsbn = String(isbn || '').trim().replace(/[-\s]/g, '');
+
+        // Check if book already exists in library catalog (by ISBN or Title)
+        let existing = null;
+        if (cleanIsbn) {
+            const [byIsbn] = await pool.query(
+                `SELECT b.book_id, b.title, b.author, b.isbn, b.total_copies, b.available_copies, c.category_name as category
+                   FROM book b
+                   JOIN category c ON b.category_id = c.category_id
+                  WHERE REPLACE(REPLACE(b.isbn, '-', ''), ' ', '') = ?`,
+                [cleanIsbn]
+            );
+            if (byIsbn.length > 0) existing = byIsbn[0];
+        }
+
+        if (!existing && cleanTitle) {
+            const [byTitle] = await pool.query(
+                `SELECT b.book_id, b.title, b.author, b.isbn, b.total_copies, b.available_copies, c.category_name as category
+                   FROM book b
+                   JOIN category c ON b.category_id = c.category_id
+                  WHERE LOWER(TRIM(b.title)) = LOWER(?)`,
+                [cleanTitle]
+            );
+            if (byTitle.length > 0) existing = byTitle[0];
+        }
+
+        if (existing) {
+            const code = `LIB${String(existing.book_id).padStart(3, '0')}`;
+            return res.status(409).json({
+                success: false,
+                alreadyExists: true,
+                book_id: existing.book_id,
+                book_code: code,
+                existingBook: {
+                    ...existing,
+                    book_code: code
+                },
+                message: `This book is already in the library catalog: "${existing.title}" (${code}) with ${existing.total_copies} total copies. You can increase its quantity manually.`
+            });
+        }
+
         const copies = parseInt(total_copies, 10) || 1;
+        const resolvedCatId = await getOrCreateCategoryId(category || category_id);
+
         const sql = `
             INSERT INTO book (title, author, publisher, isbn, edition, shelf_number, is_reference, total_copies, available_copies, category_id)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `;
         const [result] = await pool.query(sql, [
-            title, author, publisher || '', isbn, edition || '1st Edition',
-            shelf_number || 'General', is_reference ? 1 : 0, copies, copies, category_id || 1
+            cleanTitle, author, publisher || '', isbn, edition || '1st Edition',
+            shelf_number || 'General', is_reference ? 1 : 0, copies, copies, resolvedCatId
         ]);
-        res.json({ success: true, book_id: result.insertId, message: 'Book created successfully' });
+
+        const [catRow] = await pool.query('SELECT category_name FROM category WHERE category_id = ?', [resolvedCatId]);
+        const catName = catRow.length > 0 ? catRow[0].category_name : 'General';
+
+        res.json({
+            success: true,
+            book_id: result.insertId,
+            book_code: `LIB${String(result.insertId).padStart(3, '0')}`,
+            category: catName,
+            category_id: resolvedCatId,
+            message: 'Book created successfully'
+        });
     } catch (err) {
+        if (err.code === 'ER_DUP_ENTRY') {
+            return res.status(409).json({
+                success: false,
+                alreadyExists: true,
+                message: 'A book with this ISBN already exists in the catalog.'
+            });
+        }
         res.status(400).json({ success: false, message: err.sqlMessage || err.message });
     }
 });
@@ -636,18 +748,63 @@ app.post('/api/librarian/books', async (req, res) => {
 // 13. Librarian: Update book
 app.put('/api/librarian/books/:id', async (req, res) => {
     const bookId = parseInt(req.params.id, 10);
-    const { title, author, publisher, isbn, edition, shelf_number, total_copies, available_copies } = req.body;
+    const { title, author, publisher, isbn, edition, shelf_number, total_copies, available_copies, category, category_id } = req.body;
     try {
+        let catId = null;
+        if (category || category_id) {
+            catId = await getOrCreateCategoryId(category || category_id);
+        }
         const sql = `
             UPDATE book
                SET title = ?, author = ?, publisher = ?, isbn = ?, edition = ?, shelf_number = ?,
-                   total_copies = ?, available_copies = ?
+                   total_copies = ?, available_copies = ?,
+                   category_id = COALESCE(?, category_id)
              WHERE book_id = ?
         `;
-        await pool.query(sql, [title, author, publisher, isbn, edition, shelf_number, total_copies, available_copies, bookId]);
+        await pool.query(sql, [title, author, publisher, isbn, edition, shelf_number, total_copies, available_copies, catId, bookId]);
         res.json({ success: true, message: 'Book updated successfully' });
     } catch (err) {
         res.status(400).json({ success: false, message: err.sqlMessage || err.message });
+    }
+});
+
+// 13b. Librarian: Increase book quantity manually
+app.post('/api/librarian/books/:id/increase-quantity', async (req, res) => {
+    const bookId = parseInt(req.params.id, 10);
+    const copiesToAdd = parseInt(req.body.copies, 10) || parseInt(req.body.count, 10) || 1;
+    if (copiesToAdd <= 0) {
+        return res.status(400).json({ success: false, message: 'Please specify a positive number of copies to add.' });
+    }
+    try {
+        const [result] = await pool.query(
+            `UPDATE book 
+                SET total_copies = total_copies + ?,
+                    available_copies = available_copies + ?
+              WHERE book_id = ?`,
+            [copiesToAdd, copiesToAdd, bookId]
+        );
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ success: false, message: 'Book not found' });
+        }
+        const [updatedRows] = await pool.query(
+            `SELECT b.book_id, b.title, b.author, b.isbn, b.total_copies, b.available_copies, c.category_name as category
+               FROM book b
+               JOIN category c ON b.category_id = c.category_id
+              WHERE b.book_id = ?`,
+            [bookId]
+        );
+        const updated = updatedRows[0];
+        const code = `LIB${String(updated.book_id).padStart(3, '0')}`;
+        res.json({
+            success: true,
+            book_id: updated.book_id,
+            book_code: code,
+            total_copies: updated.total_copies,
+            available_copies: updated.available_copies,
+            message: `Successfully increased quantity of "${updated.title}" by ${copiesToAdd}. Total copies now: ${updated.total_copies} (Available: ${updated.available_copies}).`
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
     }
 });
 

@@ -113,6 +113,7 @@
                         <div class="lib-section" id="sec-add-book" style="display:none">
                             <div class="panel">
                                 <h3 style="margin-bottom:20px">Add New Book</h3>
+                                <div id="ab-existing-alert" style="display:none; background:#fffbeb; border:1px solid #f59e0b; color:#92400e; padding:12px 16px; border-radius:6px; margin-bottom:20px;"></div>
                                 <form id="add-book-form">
                                     <div class="form-row">
                                         <div class="form-group">
@@ -140,6 +141,9 @@
                                             <select id="ab-category" required>
                                                 <option value="">— Select —</option>
                                             </select>
+                                            <div id="ab-custom-category-wrap" style="display:none; margin-top:8px;">
+                                                <input type="text" id="ab-custom-category" placeholder="Enter custom category (e.g. Non-Fiction)">
+                                            </div>
                                         </div>
                                         <div class="form-group">
                                             <label>Edition</label>
@@ -510,16 +514,15 @@
                 list.forEach(function (book) {
                     var tr = document.createElement("tr");
                     tr.innerHTML =
-                        '<td>' + book.book_id + '</td>' +
-                        '<td>' + book.title + '</td>' +
-                        '<td>' + book.author + '</td>' +
-                        '<td>' + book.category + '</td>' +
-                        '<td>' + book.available_copies + '/' + book.total_copies + '</td>' +
-                        '<td>' + book.shelf_number + '</td>' +
+                        '<td><strong>' + escapeHTML(book.book_id || book.book_code) + '</strong></td>' +
+                        '<td>' + escapeHTML(book.title) + '</td>' +
+                        '<td>' + escapeHTML(book.author) + '</td>' +
+                        '<td><span class="badge badge-blue">' + escapeHTML(book.category) + '</span></td>' +
+                        '<td><strong>' + book.available_copies + '</strong> / ' + book.total_copies + '</td>' +
+                        '<td>' + escapeHTML(book.shelf_number) + '</td>' +
                         '<td>' +
-                            '<button class="btn btn-sm btn-outline" onclick="viewBookDetails(\'' + book.book_id + '\')">View</button> ' +
-                            '<button class="btn btn-sm btn-secondary" onclick="editBookModal(\'' + book.book_id + '\')">Edit</button> ' +
-                            '<button class="btn btn-sm btn-danger" onclick="deleteBookConfirm(\'' + book.book_id + '\')">Delete</button>' +
+                            '<button class="btn btn-sm btn-outline" onclick="viewBookDetails(\'' + escapeHTML(book.book_id || book.book_code) + '\')">View</button> ' +
+                            '<button class="btn btn-sm btn-secondary" onclick="editBookModal(\'' + escapeHTML(book.book_id || book.book_code) + '\')">Edit</button>' +
                         '</td>';
                     tbody.appendChild(tr);
                 });
@@ -530,6 +533,73 @@
                 renderLibBooks(this.value);
             });
 
+            // ====== INCREASE BOOK QUANTITY MODAL ======
+            window.openIncreaseQuantityModal = function (bookId) {
+                var book = getBookById(bookId);
+                if (!book) return;
+
+                var bodyHTML =
+                    '<div style="margin-bottom:15px;">' +
+                        '<p style="font-size:1.05rem; margin-bottom:6px;"><strong>' + escapeHTML(book.title) + '</strong> <span class="badge badge-blue">' + escapeHTML(book.book_id || book.book_code) + '</span></p>' +
+                        '<p style="color:#64748b; font-size:0.88rem;">Author: ' + escapeHTML(book.author) + ' &bull; Category: <span class="badge badge-gray">' + escapeHTML(book.category) + '</span></p>' +
+                    '</div>' +
+                    '<div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:12px 16px; margin-bottom:16px; display:flex; justify-content:space-around; text-align:center;">' +
+                        '<div><div style="font-size:0.75rem; color:#64748b; text-transform:uppercase; letter-spacing:0.5px;">Current Total</div><div style="font-size:1.4rem; font-weight:700; color:#1e293b;" id="modal-curr-total">' + book.total_copies + '</div></div>' +
+                        '<div><div style="font-size:0.75rem; color:#64748b; text-transform:uppercase; letter-spacing:0.5px;">Current Available</div><div style="font-size:1.4rem; font-weight:700; color:#16a34a;" id="modal-curr-avail">' + book.available_copies + '</div></div>' +
+                    '</div>' +
+                    '<div class="form-group">' +
+                        '<label><strong>Number of New Copies to Add:</strong></label>' +
+                        '<div style="display:flex; gap:8px; align-items:center; margin-top:6px;">' +
+                            '<input type="number" id="qty-to-add" min="1" value="1" style="font-size:1.1rem; padding:8px 12px; width:100px; font-weight:600; text-align:center;" required>' +
+                            '<button type="button" class="btn btn-sm btn-outline" onclick="document.getElementById(\'qty-to-add\').value=1">+1</button>' +
+                            '<button type="button" class="btn btn-sm btn-outline" onclick="document.getElementById(\'qty-to-add\').value=2">+2</button>' +
+                            '<button type="button" class="btn btn-sm btn-outline" onclick="document.getElementById(\'qty-to-add\').value=5">+5</button>' +
+                            '<button type="button" class="btn btn-sm btn-outline" onclick="document.getElementById(\'qty-to-add\').value=10">+10</button>' +
+                        '</div>' +
+                        '<small style="color:#64748b; display:block; margin-top:6px;">This adds copies to both Total Copies and Available Copies in the library database.</small>' +
+                    '</div>';
+
+                var footerHTML =
+                    '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+                    '<button class="btn btn-primary" id="confirm-add-qty-btn" style="background:#16a34a;">+ Add Copies</button>';
+
+                showModal("Increase Quantity — " + escapeHTML(book.title), bodyHTML, footerHTML);
+
+                document.getElementById("confirm-add-qty-btn").addEventListener("click", async function () {
+                    var count = parseInt(document.getElementById("qty-to-add").value, 10);
+                    if (!count || count <= 0) {
+                        showToast("Please enter a valid positive number of copies.", "error");
+                        return;
+                    }
+                    closeModal();
+                    await doIncreaseQuantity(book.book_id || book.numeric_id, count);
+                });
+            };
+
+            async function doIncreaseQuantity(bookIdentifier, count) {
+                var book = getBookById(bookIdentifier);
+                var targetId = book ? (book.numeric_id || parseInt(String(book.book_id).replace(/\D/g, ''), 10) || book.book_id) : bookIdentifier;
+
+                var res = await LibraryAPI.increaseBookQuantity(targetId, count);
+                if (res && res.success) {
+                    await syncDatabaseWithBackend();
+                    renderLibBooks();
+                    showToast(res.message || ("Successfully added " + count + " copies!"), "success");
+                } else {
+                    // Fallback local update if server unavailable
+                    if (book) {
+                        book.total_copies = (parseInt(book.total_copies, 10) || 0) + count;
+                        book.available_copies = (parseInt(book.available_copies, 10) || 0) + count;
+                        if (typeof saveBooks === "function") saveBooks();
+                        renderLibBooks();
+                        showToast("Added " + count + " copies to " + book.title + "! New total: " + book.total_copies, "success");
+                    } else {
+                        showToast("Failed to update book quantity.", "error");
+                    }
+                }
+            }
+            window.doIncreaseQuantity = doIncreaseQuantity;
+
             // Edit Book Modal
             window.editBookModal = function (bookId) {
                 var book = getBookById(bookId);
@@ -537,35 +607,46 @@
 
                 var bodyHTML =
                     '<form id="edit-book-form">' +
-                    '<div class="form-group"><label>Title</label><input type="text" id="eb-title" value="' + book.title + '"></div>' +
-                    '<div class="form-group"><label>Author</label><input type="text" id="eb-author" value="' + book.author + '"></div>' +
-                    '<div class="form-group"><label>ISBN</label><input type="text" id="eb-isbn" value="' + book.isbn + '"></div>' +
-                    '<div class="form-group"><label>Publisher</label><input type="text" id="eb-publisher" value="' + (book.publisher || '') + '"></div>' +
-                    '<div class="form-group"><label>Category</label><input type="text" id="eb-category" value="' + book.category + '"></div>' +
-                    '<div class="form-group"><label>Edition</label><input type="text" id="eb-edition" value="' + book.edition + '"></div>' +
+                    '<div class="form-group"><label>Title</label><input type="text" id="eb-title" value="' + escapeHTML(book.title) + '"></div>' +
+                    '<div class="form-group"><label>Author</label><input type="text" id="eb-author" value="' + escapeHTML(book.author) + '"></div>' +
+                    '<div class="form-group"><label>ISBN</label><input type="text" id="eb-isbn" value="' + escapeHTML(book.isbn) + '"></div>' +
+                    '<div class="form-group"><label>Publisher</label><input type="text" id="eb-publisher" value="' + escapeHTML(book.publisher || '') + '"></div>' +
+                    '<div class="form-group"><label>Category</label><input type="text" id="eb-category" value="' + escapeHTML(book.category) + '"></div>' +
+                    '<div class="form-group"><label>Edition</label><input type="text" id="eb-edition" value="' + escapeHTML(book.edition) + '"></div>' +
                     '<div class="form-row">' +
                     '<div class="form-group"><label>Total Copies</label><input type="number" id="eb-total" value="' + book.total_copies + '"></div>' +
                     '<div class="form-group"><label>Available Copies</label><input type="number" id="eb-available" value="' + book.available_copies + '"></div>' +
                     '</div>' +
-                    '<div class="form-group"><label>Shelf Number</label><input type="text" id="eb-shelf" value="' + book.shelf_number + '"></div>' +
+                    '<div style="margin-top:-8px; margin-bottom:14px;">' +
+                        '<small style="color:#64748b;">Quick add copies: </small>' +
+                        '<button type="button" class="btn btn-xs btn-outline" style="padding:2px 8px; font-size:0.75rem;" onclick="var t=document.getElementById(\'eb-total\'); var a=document.getElementById(\'eb-available\'); t.value=parseInt(t.value||0)+1; a.value=parseInt(a.value||0)+1;">+1 copy</button> ' +
+                        '<button type="button" class="btn btn-xs btn-outline" style="padding:2px 8px; font-size:0.75rem;" onclick="var t=document.getElementById(\'eb-total\'); var a=document.getElementById(\'eb-available\'); t.value=parseInt(t.value||0)+5; a.value=parseInt(a.value||0)+5;">+5 copies</button>' +
+                    '</div>' +
+                    '<div class="form-group"><label>Shelf Number</label><input type="text" id="eb-shelf" value="' + escapeHTML(book.shelf_number) + '"></div>' +
                     '</form>';
 
-                var footerHTML = '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
-                    '<button class="btn btn-primary" id="save-book-btn">Save Changes</button>';
+                var footerHTML =
+                    '<div style="display:flex; justify-content:space-between; align-items:center; width:100%;">' +
+                        '<button class="btn btn-sm btn-danger" onclick="closeModal(); deleteBookConfirm(\'' + escapeHTML(book.book_id || book.book_code) + '\')">Delete Book</button>' +
+                        '<div>' +
+                            '<button class="btn btn-secondary" onclick="closeModal()" style="margin-right:8px;">Cancel</button>' +
+                            '<button class="btn btn-primary" id="save-book-btn">Save Changes</button>' +
+                        '</div>' +
+                    '</div>';
 
-                showModal("Edit Book — " + book.book_id, bodyHTML, footerHTML);
+                showModal("Edit Book — " + (book.book_id || book.book_code), bodyHTML, footerHTML);
 
                 document.getElementById("save-book-btn").addEventListener("click", async function () {
                     var updated = {
-                        title: document.getElementById("eb-title").value,
-                        author: document.getElementById("eb-author").value,
-                        isbn: document.getElementById("eb-isbn").value,
-                        publisher: document.getElementById("eb-publisher").value,
-                        category: document.getElementById("eb-category").value,
-                        edition: document.getElementById("eb-edition").value,
+                        title: document.getElementById("eb-title").value.trim(),
+                        author: document.getElementById("eb-author").value.trim(),
+                        isbn: document.getElementById("eb-isbn").value.trim(),
+                        publisher: document.getElementById("eb-publisher").value.trim(),
+                        category: document.getElementById("eb-category").value.trim(),
+                        edition: document.getElementById("eb-edition").value.trim(),
                         total_copies: parseInt(document.getElementById("eb-total").value) || book.total_copies,
                         available_copies: parseInt(document.getElementById("eb-available").value) || book.available_copies,
-                        shelf_number: document.getElementById("eb-shelf").value
+                        shelf_number: document.getElementById("eb-shelf").value.trim()
                     };
 
                     const targetId = book.numeric_id || parseInt(String(book.book_id).replace(/\D/g, ''), 10) || book.book_id;
@@ -574,6 +655,7 @@
                         await syncDatabaseWithBackend();
                         closeModal();
                         renderLibBooks();
+                        refreshCategoryDropdown();
                         showToast("Book updated in database successfully.", "success");
                     } else {
                         // local fallback if server unavailable
@@ -581,6 +663,7 @@
                         if (typeof saveBooks === "function") saveBooks();
                         closeModal();
                         renderLibBooks();
+                        refreshCategoryDropdown();
                         showToast("Book updated successfully.", "success");
                     }
                 });
@@ -591,7 +674,7 @@
                 var book = getBookById(bookId);
                 if (!book) return;
 
-                showConfirm("Are you sure you want to remove <strong>" + book.title + "</strong> (" + book.book_id + ") from the library database?", async function () {
+                showConfirm("Are you sure you want to remove <strong>" + escapeHTML(book.title) + "</strong> (" + (book.book_id || book.book_code) + ") from the library database?", async function () {
                     const targetId = book.numeric_id || parseInt(String(book.book_id).replace(/\D/g, ''), 10) || book.book_id;
                     const res = await LibraryAPI.deleteBook(targetId);
                     if (res && res.success) {
@@ -612,53 +695,180 @@
                 });
             };
 
-            // ====== ADD BOOK ======
-            // Populate category dropdown
-            var catSelect = document.getElementById("ab-category");
-            getBookCategories().forEach(function (cat) {
-                var opt = document.createElement("option");
-                opt.value = cat;
-                opt.textContent = cat;
-                catSelect.appendChild(opt);
-            });
-            // Add "Other" option
-            var otherOpt = document.createElement("option");
-            otherOpt.value = "__other__";
-            otherOpt.textContent = "Other (type below)";
-            catSelect.appendChild(otherOpt);
+            // ====== ADD BOOK & CATEGORIES ======
+            function refreshCategoryDropdown(selectedCategory) {
+                var catSelect = document.getElementById("ab-category");
+                if (!catSelect) return;
+                catSelect.innerHTML = '<option value="">— Select Category —</option>';
+                var allCats = getBookCategories();
+                allCats.forEach(function (cat) {
+                    if (!cat || cat === "__other__") return;
+                    var opt = document.createElement("option");
+                    opt.value = cat;
+                    opt.textContent = cat;
+                    if (selectedCategory && cat.toLowerCase() === selectedCategory.toLowerCase()) {
+                        opt.selected = true;
+                    }
+                    catSelect.appendChild(opt);
+                });
+                // Add "Other" option
+                var otherOpt = document.createElement("option");
+                otherOpt.value = "__other__";
+                otherOpt.textContent = "+ Other (Type custom category)";
+                catSelect.appendChild(otherOpt);
+            }
 
+            refreshCategoryDropdown();
+
+            // Handle custom category field toggle
+            document.getElementById("ab-category").addEventListener("change", function () {
+                var customWrap = document.getElementById("ab-custom-category-wrap");
+                var customInput = document.getElementById("ab-custom-category");
+                if (this.value === "__other__") {
+                    customWrap.style.display = "block";
+                    customInput.required = true;
+                    customInput.focus();
+                } else {
+                    customWrap.style.display = "none";
+                    customInput.required = false;
+                    customInput.value = "";
+                }
+            });
+
+            // Live duplicate detection
+            function checkAddBookDuplicate() {
+                var title = (document.getElementById("ab-title").value || "").trim();
+                var isbn = (document.getElementById("ab-isbn").value || "").trim();
+                var alertBox = document.getElementById("ab-existing-alert");
+                if (!alertBox) return;
+
+                if (!title && !isbn) {
+                    alertBox.style.display = "none";
+                    return;
+                }
+
+                var cleanIsbn = isbn.replace(/[-\s]/g, '').toLowerCase();
+                var cleanTitle = title.toLowerCase();
+
+                var match = books.find(function (b) {
+                    var bIsbn = String(b.isbn || '').replace(/[-\s]/g, '').toLowerCase();
+                    var bTitle = String(b.title || '').trim().toLowerCase();
+                    if (cleanIsbn && bIsbn === cleanIsbn) return true;
+                    if (cleanTitle && bTitle === cleanTitle) return true;
+                    return false;
+                });
+
+                if (match) {
+                    var matchReason = (cleanIsbn && String(match.isbn || '').replace(/[-\s]/g, '').toLowerCase() === cleanIsbn) ? "ISBN" : "Title";
+                    alertBox.innerHTML =
+                        '<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">' +
+                            '<div>' +
+                                '<strong style="color:#b45309; font-size:0.95rem;">⚠️ Notice: This book is already in the library catalog!</strong><br>' +
+                                '<span style="font-size:0.88rem; color:#78350f;">Matched by ' + matchReason + ': <strong>' + escapeHTML(match.title) + '</strong> (' + (match.book_id || match.book_code) + ') &bull; Category: ' + escapeHTML(match.category) + ' &bull; Current stock: <strong>' + match.total_copies + ' copies</strong></span>' +
+                            '</div>' +
+                            '<div>' +
+                                '<button type="button" class="btn btn-sm" onclick="openIncreaseQuantityModal(\'' + escapeHTML(match.book_id || match.book_code) + '\')" style="background:#16a34a; color:#fff; white-space:nowrap;">+ Increase Quantity Instead</button>' +
+                            '</div>' +
+                        '</div>';
+                    alertBox.style.display = "block";
+                } else {
+                    alertBox.style.display = "none";
+                }
+            }
+
+            document.getElementById("ab-title").addEventListener("input", checkAddBookDuplicate);
+            document.getElementById("ab-isbn").addEventListener("input", checkAddBookDuplicate);
+
+            // Add Book form submission
             document.getElementById("add-book-form").addEventListener("submit", async function (e) {
                 e.preventDefault();
 
-                var category = document.getElementById("ab-category").value;
-                if (category === "__other__") {
-                    category = prompt("Enter new category name:");
-                    if (!category) return;
+                var rawCategory = document.getElementById("ab-category").value;
+                var finalCategory = rawCategory;
+                if (rawCategory === "__other__") {
+                    finalCategory = (document.getElementById("ab-custom-category").value || "").trim();
+                    if (!finalCategory) {
+                        showToast("Please enter the custom category name.", "error");
+                        document.getElementById("ab-custom-category").focus();
+                        return;
+                    }
+                }
+
+                var copiesCount = parseInt(document.getElementById("ab-copies").value) || 1;
+                var title = document.getElementById("ab-title").value.trim();
+                var isbn = document.getElementById("ab-isbn").value.trim();
+
+                // Check if book already exists locally
+                var cleanIsbn = isbn.replace(/[-\s]/g, '').toLowerCase();
+                var cleanTitle = title.toLowerCase();
+                var existing = books.find(function (b) {
+                    var bIsbn = String(b.isbn || '').replace(/[-\s]/g, '').toLowerCase();
+                    var bTitle = String(b.title || '').trim().toLowerCase();
+                    return (cleanIsbn && bIsbn === cleanIsbn) || (cleanTitle && bTitle === cleanTitle);
+                });
+
+                if (existing) {
+                    showToast('Book "' + existing.title + '" is already in the section (' + (existing.book_id || existing.book_code) + ')!', 'warning');
+                    showConfirm(
+                        'The book <strong>"' + escapeHTML(existing.title) + '"</strong> (' + (existing.book_id || existing.book_code) + ') is already in the book section with ' + existing.total_copies + ' total copies.<br><br>Would you like to <strong>increase its quantity</strong> by +' + copiesCount + ' copies instead?',
+                        async function () {
+                            await doIncreaseQuantity(existing.book_id || existing.numeric_id, copiesCount);
+                            document.getElementById("add-book-form").reset();
+                            document.getElementById("ab-custom-category-wrap").style.display = "none";
+                            document.getElementById("ab-existing-alert").style.display = "none";
+                        }
+                    );
+                    return;
                 }
 
                 var bookData = {
-                    title: document.getElementById("ab-title").value.trim(),
+                    title: title,
                     author: document.getElementById("ab-author").value.trim(),
-                    isbn: document.getElementById("ab-isbn").value.trim(),
+                    isbn: isbn,
                     publisher: document.getElementById("ab-publisher").value.trim() || "—",
-                    category: category,
+                    category: finalCategory,
                     edition: document.getElementById("ab-edition").value.trim() || "1st Edition",
-                    total_copies: parseInt(document.getElementById("ab-copies").value) || 1,
-                    available_copies: parseInt(document.getElementById("ab-copies").value) || 1,
+                    total_copies: copiesCount,
+                    available_copies: copiesCount,
                     shelf_number: document.getElementById("ab-shelf").value.trim() || "—"
                 };
 
                 const res = await LibraryAPI.addBook(bookData);
+
+                if (res && res.alreadyExists) {
+                    showToast(res.message || "This book is already in the section!", "warning");
+                    var targetId = res.book_id || (res.existingBook && res.existingBook.book_id);
+                    if (targetId) {
+                        showConfirm(
+                            (res.message || 'Book already exists in section.') + '<br><br>Would you like to increase its quantity instead?',
+                            async function () {
+                                await doIncreaseQuantity(targetId, copiesCount);
+                                document.getElementById("add-book-form").reset();
+                                document.getElementById("ab-custom-category-wrap").style.display = "none";
+                                document.getElementById("ab-existing-alert").style.display = "none";
+                            }
+                        );
+                    }
+                    return;
+                }
+
                 if (res && res.success) {
                     await syncDatabaseWithBackend();
                     this.reset();
+                    document.getElementById("ab-custom-category-wrap").style.display = "none";
+                    document.getElementById("ab-existing-alert").style.display = "none";
+                    refreshCategoryDropdown(finalCategory);
                     renderLibBooks();
-                    showToast("Book saved to database! ID: LIB" + String(res.book_id).padStart(3, '0'), "success");
+                    showToast("Book saved to database! ID: LIB" + String(res.book_id).padStart(3, '0') + " (Category: " + (res.category || finalCategory) + ")", "success");
                 } else {
                     var newBook = Object.assign({ book_id: generateBookId() }, bookData);
                     books.push(newBook);
                     if (typeof saveBooks === "function") saveBooks();
                     this.reset();
+                    document.getElementById("ab-custom-category-wrap").style.display = "none";
+                    document.getElementById("ab-existing-alert").style.display = "none";
+                    refreshCategoryDropdown(finalCategory);
+                    renderLibBooks();
                     showToast("Book added locally! ID: " + newBook.book_id, "success");
                 }
             });

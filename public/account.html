@@ -268,7 +268,7 @@
                         '<td>' + formatDate(txn.due_date) + '</td>' +
                         '<td><span class="status-badge ' + statusClass + '">' + statusLabel + '</span></td>' +
                         '<td>' +
-                            '<button class="btn btn-sm btn-outline" onclick="viewBookDetails(\'' + (txn.book_id || bookCode) + '\')">View</button> ' +
+                            '<button class="btn btn-sm btn-outline" onclick="viewBookDetails(\'' + escapeHtml(bookCode) + '\')">View</button> ' +
                             '<button class="btn btn-sm btn-secondary" onclick="returnMemberBook(\'' + (txn.borrow_id || txn.transaction_id) + '\', \'' + txn.book_id + '\')">Return</button>' +
                         '</td>';
                     borrowedBody.appendChild(tr);
